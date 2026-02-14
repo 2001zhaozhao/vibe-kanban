@@ -8,10 +8,21 @@ higher level while preserving high code quality and control.
 
 ## Improvements
 
-* Added a Remote Single-User Mode
+* Added a Remote Single-User Mode for use without OAuth
   * Allows skipping GitHub/Google OAuth and support a local account when self-hosting both the remote server,
     local server, and frontend.
   * All new Vibe-Kanban features such as organizations, projects, and the kanban board work properly.
+* Added a convenience button to Merge All repositories, and a variant that also moves the linked issue to Done.
+  * The feature is adaptive: if code is already merged, the Merge button will be disabled,
+    and the Merge & Complete button can still move issue to done.
+    If linked issue is already done, the Merge & Complete button will be disabled.
+    If the workspace is not linked to any issue in any kanban board, the Merge & Complete button will be hidden.
+* Added Toasts feature
+  * Vibe-Kanban dev complained it isn't accessible, but it sure can be helpful so I've added it to this fork.
+  * Toasts are shown when Merge (both single-repo and multi-repo shortcut) are successful; when an issue is created;
+    when an issue is moved between categories by user action; and when an agent completes
+    (which previously only played sound).
+* You can now see basic information of the linked issue from the Workspace UI
 
 ## Long-term goal of the fork
 
