@@ -81,6 +81,12 @@ export const useJsonPatchWsStream = <T extends object>(
       return;
     }
 
+    // Flag to track if this effect has been cleaned up (e.g. by React Strict
+    // Mode unmounting immediately). Handlers check this so they become no-ops
+    // after cleanup, and the cleanup itself avoids calling ws.close() on a
+    // socket that is still CONNECTING (which would log a browser warning).
+    let isCancelled = false;
+
     // Initialize data
     if (!dataRef.current) {
       dataRef.current = initialData();
@@ -101,6 +107,12 @@ export const useJsonPatchWsStream = <T extends object>(
       const ws = new WebSocket(wsEndpoint);
 
       ws.onopen = () => {
+        // If the effect was already cleaned up (Strict Mode), close the now-
+        // open socket cleanly instead of leaving it dangling.
+        if (isCancelled) {
+          ws.close();
+          return;
+        }
         setError(null);
         setIsConnected(true);
         // Reset backoff on successful connection
@@ -112,6 +124,7 @@ export const useJsonPatchWsStream = <T extends object>(
       };
 
       ws.onmessage = (event) => {
+        if (isCancelled) return;
         try {
           const msg: WsMsg = JSON.parse(event.data);
 
@@ -154,10 +167,12 @@ export const useJsonPatchWsStream = <T extends object>(
       };
 
       ws.onerror = () => {
+        if (isCancelled) return;
         setError('Connection failed');
       };
 
       ws.onclose = (evt) => {
+        if (isCancelled) return;
         setIsConnected(false);
         wsRef.current = null;
 
@@ -175,17 +190,18 @@ export const useJsonPatchWsStream = <T extends object>(
     }
 
     return () => {
+      isCancelled = true;
+
       if (wsRef.current) {
         const ws = wsRef.current;
 
-        // Clear all event handlers first to prevent callbacks after cleanup
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onerror = null;
-        ws.onclose = null;
-
-        // Close regardless of state
-        ws.close();
+        // Only close if the connection is already open. If still CONNECTING
+        // (e.g. during React Strict Mode's immediate unmount), the onopen
+        // handler above will close it once the handshake completes, avoiding
+        // the "WebSocket is closed before the connection is established" warning.
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
         wsRef.current = null;
       }
       if (retryTimerRef.current) {

@@ -215,6 +215,8 @@ export const PERSIST_KEYS = {
   // Panel sizes
   rightMainPanel: 'right-main-panel',
   kanbanLeftPanel: 'kanban-left-panel',
+  // Issue section (right sidebar)
+  issueSection: 'issue-section',
   // Kanban issue panel sections
   kanbanIssueSubIssues: 'kanban-issue-sub-issues',
   kanbanIssueRelationships: 'kanban-issue-relationships',
@@ -249,6 +251,7 @@ export type PersistKey =
   | typeof PERSIST_KEYS.kanbanIssueSubIssues
   | typeof PERSIST_KEYS.kanbanIssueRelationships
   | typeof PERSIST_KEYS.kanbanIssueAttachments
+  | typeof PERSIST_KEYS.issueSection
   | `repo-card-${string}`
   | `diff:${string}`
   | `edit:${string}`

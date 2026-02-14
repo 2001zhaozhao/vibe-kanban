@@ -84,7 +84,16 @@ function createErrorHandlingFetch(
       errorHandler.reset();
       return response;
     } catch (error) {
-      // Always pass network errors to onError (debouncing happens there)
+      // Don't report abort errors — expected during navigation/unmounting.
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+      // Don't report errors while paused (request was in-flight when
+      // token refresh or logout triggered pause — the abort is expected).
+      if (isPaused?.()) {
+        throw error;
+      }
+      // Pass remaining network errors to onError (debouncing happens there)
       const message = error instanceof Error ? error.message : 'Network error';
       onError?.({ message });
       throw error;

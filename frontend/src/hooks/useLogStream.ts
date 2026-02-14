@@ -26,6 +26,11 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
     // Update the ref to track the current processId
     currentProcessIdRef.current = processId;
 
+    // Flag to track if this effect has been cleaned up (e.g. by React Strict
+    // Mode unmounting immediately). Handlers check this so they become no-ops
+    // after cleanup.
+    let isCancelled = false;
+
     // Clear logs when process changes
     setLogs([]);
     setError(null);
@@ -42,6 +47,12 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
       isIntentionallyClosed.current = false;
 
       ws.onopen = () => {
+        // If the effect was already cleaned up (Strict Mode), close the now-
+        // open socket cleanly instead of leaving it dangling.
+        if (isCancelled) {
+          ws.close();
+          return;
+        }
         // Ignore if processId has changed since WebSocket was opened
         if (currentProcessIdRef.current !== capturedProcessId) {
           ws.close();
@@ -55,7 +66,10 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
 
       const addLogEntry = (entry: LogEntry) => {
         // Only add log entry if this WebSocket is still for the current process
-        if (currentProcessIdRef.current !== capturedProcessId) {
+        if (
+          isCancelled ||
+          currentProcessIdRef.current !== capturedProcessId
+        ) {
           return;
         }
         setLogs((prev) => [...prev, entry]);
@@ -63,6 +77,7 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
 
       // Handle WebSocket messages
       ws.onmessage = (event) => {
+        if (isCancelled) return;
         try {
           const data = JSON.parse(event.data);
 
@@ -93,6 +108,7 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
       };
 
       ws.onerror = () => {
+        if (isCancelled) return;
         // Ignore errors from stale WebSocket connections
         if (currentProcessIdRef.current !== capturedProcessId) {
           return;
@@ -101,6 +117,7 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
       };
 
       ws.onclose = (event) => {
+        if (isCancelled) return;
         // Don't retry for stale WebSocket connections
         if (currentProcessIdRef.current !== capturedProcessId) {
           return;
@@ -120,9 +137,17 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
     open();
 
     return () => {
+      isCancelled = true;
+
       if (wsRef.current) {
         isIntentionallyClosed.current = true;
-        wsRef.current.close();
+        // Only close if the connection is already open. If still CONNECTING
+        // (e.g. during React Strict Mode's immediate unmount), the onopen
+        // handler above will close it once the handshake completes, avoiding
+        // the "WebSocket is closed before the connection is established" warning.
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.close();
+        }
         wsRef.current = null;
       }
       if (retryTimerRef.current) {

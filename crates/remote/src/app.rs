@@ -129,6 +129,8 @@ impl Server {
 
         let http_client = reqwest::Client::builder()
             .user_agent("VibeKanbanRemote/1.0")
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .context("failed to create HTTP client")?;
 
