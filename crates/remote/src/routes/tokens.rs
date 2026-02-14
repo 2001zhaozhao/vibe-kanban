@@ -102,14 +102,21 @@ pub async fn refresh_token(
     }
 
     // Check if provider has revoked the OAuth token
-    let provider_token_details = state
-        .oauth_token_validator()
-        .validate(
-            token_details.provider_token_details.clone(),
-            token_details.user_id,
-            token_details.session_id,
-        )
-        .await?;
+    // In single-user mode with the "local" provider, skip OAuth validation
+    let provider_token_details = if state.single_user_mode()
+        && token_details.provider_token_details.provider == "local"
+    {
+        token_details.provider_token_details.clone()
+    } else {
+        state
+            .oauth_token_validator()
+            .validate(
+                token_details.provider_token_details.clone(),
+                token_details.user_id,
+                token_details.session_id,
+            )
+            .await?
+    };
 
     let user_repo = UserRepository::new(state.pool());
     let user = user_repo.fetch_user(token_details.user_id).await?;

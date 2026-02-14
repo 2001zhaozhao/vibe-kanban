@@ -17,7 +17,7 @@ use crate::{
     config::RemoteServerConfig,
     db,
     github_app::GitHubAppService,
-    mail::LoopsMailer,
+    mail::{LoopsMailer, NoopMailer},
     r2::R2Service,
     routes,
 };
@@ -64,7 +64,7 @@ impl Server {
             )?);
         }
 
-        if registry.is_empty() {
+        if registry.is_empty() && !config.single_user_mode {
             bail!("no OAuth providers configured");
         }
 
@@ -80,15 +80,34 @@ impl Server {
         let oauth_token_validator =
             Arc::new(OAuthTokenValidator::new(pool.clone(), registry.clone()));
 
-        let api_key = std::env::var("LOOPS_EMAIL_API_KEY")
-            .context("LOOPS_EMAIL_API_KEY environment variable is required")?;
-        let mailer = Arc::new(LoopsMailer::new(api_key));
+        let mailer: Arc<dyn crate::mail::Mailer> = if config.single_user_mode {
+            tracing::info!("Single-user mode: using NoopMailer");
+            Arc::new(NoopMailer)
+        } else {
+            let api_key = std::env::var("LOOPS_EMAIL_API_KEY")
+                .context("LOOPS_EMAIL_API_KEY environment variable is required")?;
+            Arc::new(LoopsMailer::new(api_key))
+        };
 
-        let server_public_base_url = config.server_public_base_url.clone().ok_or_else(|| {
-            anyhow::anyhow!(
+        let server_public_base_url = config
+            .server_public_base_url
+            .clone()
+            .unwrap_or_else(|| {
+                if config.single_user_mode {
+                    tracing::info!(
+                        "Single-user mode: defaulting SERVER_PUBLIC_BASE_URL to http://localhost:8081"
+                    );
+                    "http://localhost:8081".to_string()
+                } else {
+                    String::new()
+                }
+            });
+
+        if server_public_base_url.is_empty() {
+            bail!(
                 "SERVER_PUBLIC_BASE_URL is not set. Please set it in your .env.remote file."
-            )
-        })?;
+            );
+        }
 
         let r2 = config.r2.as_ref().map(R2Service::new);
         if r2.is_some() {
@@ -174,6 +193,7 @@ impl Server {
             github_app,
             billing,
             analytics,
+            config.single_user_mode,
         );
 
         let router = routes::router(state);

@@ -39,6 +39,7 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/auth/status", get(status))
         .route("/auth/token", get(get_token))
         .route("/auth/user", get(get_current_user))
+        .route("/auth/single-user/login", post(single_user_login))
 }
 
 #[derive(Debug, Deserialize)]
@@ -241,17 +242,25 @@ async fn status(
 ) -> Result<ResponseJson<ApiResponse<StatusResponse>>, ApiError> {
     use api_types::LoginStatus;
 
+    let single_user_mode = if deployment.single_user_mode() {
+        Some(true)
+    } else {
+        None
+    };
+
     match deployment.get_login_status().await {
         LoginStatus::LoggedOut => Ok(ResponseJson(ApiResponse::success(StatusResponse {
             logged_in: false,
             profile: None,
             degraded: None,
+            single_user_mode,
         }))),
         LoginStatus::LoggedIn { profile } => {
             Ok(ResponseJson(ApiResponse::success(StatusResponse {
                 logged_in: true,
                 profile: Some(profile),
                 degraded: None,
+                single_user_mode,
             })))
         }
     }
@@ -300,6 +309,41 @@ async fn get_current_user(
     Ok(ResponseJson(ApiResponse::success(CurrentUserResponse {
         user_id,
     })))
+}
+
+async fn single_user_login(
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<serde_json::Value>>, ApiError> {
+    let client = deployment.remote_client()?;
+
+    let response = client
+        .single_user_login()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("Single-user login failed: {e}")))?;
+
+    let expires_at = extract_expiration(&response.access_token)
+        .map_err(|err| ApiError::BadRequest(format!("Invalid access token: {err}")))?;
+    let credentials = Credentials {
+        access_token: Some(response.access_token.clone()),
+        refresh_token: response.refresh_token.clone(),
+        expires_at: Some(expires_at),
+    };
+
+    deployment
+        .auth_context()
+        .save_credentials(&credentials)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "failed to save credentials");
+            ApiError::Io(e)
+        })?;
+
+    // Fetch and cache the user's profile
+    let _ = deployment.get_login_status().await;
+
+    Ok(ResponseJson(ApiResponse::success(
+        serde_json::json!({ "ok": true }),
+    )))
 }
 
 fn generate_secret() -> String {

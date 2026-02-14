@@ -40,7 +40,7 @@ thiserror = "2.0.12"
 ts-rs = { git = "https://github.com/xazukx/ts-rs.git", branch = "use-ts-enum", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 api-types = { path = "../api-types" }
 utils = { path = "../utils" }
-uuid = { version = "1", features = ["serde", "v4"] }
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
 rand = "0.9"
 sha2 = "0.10"

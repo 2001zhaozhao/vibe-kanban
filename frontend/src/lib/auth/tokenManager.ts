@@ -157,11 +157,33 @@ class TokenManager {
     // If they're already logged out, 401s are expected — don't show the dialog.
     const cachedSystem = queryClient.getQueryData<{
       login_status?: { status: string };
+      single_user_mode?: boolean;
     }>(['user-system']);
     const wasLoggedIn = cachedSystem?.login_status?.status === 'loggedin';
+    const isSingleUserMode = cachedSystem?.single_user_mode === true;
 
     // Pause shapes — session is invalid, prevent further 401s
     this.pauseShapes();
+
+    // In single-user mode, try to re-login automatically instead of showing dialog
+    if (isSingleUserMode) {
+      try {
+        await oauthApi.singleUserLogin();
+        await queryClient.invalidateQueries({ queryKey: ['user-system'] });
+        await queryClient.invalidateQueries({ queryKey: TOKEN_QUERY_KEY });
+        const data = await queryClient.fetchQuery({
+          queryKey: TOKEN_QUERY_KEY,
+          queryFn: () => oauthApi.getToken(),
+          staleTime: TOKEN_STALE_TIME,
+        });
+        if (data?.access_token) {
+          this.resumeShapes();
+          return;
+        }
+      } catch (err) {
+        console.error('Single-user re-auth failed:', err);
+      }
+    }
 
     // Reload system state so the UI transitions to logged-out
     await queryClient.invalidateQueries({ queryKey: ['user-system'] });

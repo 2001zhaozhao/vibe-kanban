@@ -28,6 +28,7 @@ pub struct AppState {
     github_app: Option<Arc<GitHubAppService>>,
     billing: BillingService,
     analytics: Option<AnalyticsService>,
+    single_user_mode: bool,
 }
 
 impl AppState {
@@ -46,6 +47,7 @@ impl AppState {
         github_app: Option<Arc<GitHubAppService>>,
         billing: BillingService,
         analytics: Option<AnalyticsService>,
+        single_user_mode: bool,
     ) -> Self {
         Self {
             pool,
@@ -61,6 +63,7 @@ impl AppState {
             github_app,
             billing,
             analytics,
+            single_user_mode,
         }
     }
 
@@ -106,5 +109,9 @@ impl AppState {
 
     pub fn analytics(&self) -> Option<&AnalyticsService> {
         self.analytics.as_ref()
+    }
+
+    pub fn single_user_mode(&self) -> bool {
+        self.single_user_mode
     }
 }

@@ -25,6 +25,45 @@ pub trait Mailer: Send + Sync {
     async fn send_review_failed(&self, email: &str, pr_name: &str, review_id: &str);
 }
 
+pub struct NoopMailer;
+
+#[async_trait]
+impl Mailer for NoopMailer {
+    async fn send_org_invitation(
+        &self,
+        org_name: &str,
+        email: &str,
+        accept_url: &str,
+        _role: MemberRole,
+        _invited_by: Option<&str>,
+    ) {
+        tracing::debug!(
+            org_name = %org_name,
+            email = %email,
+            accept_url = %accept_url,
+            "NoopMailer: skipping org invitation email"
+        );
+    }
+
+    async fn send_review_ready(&self, email: &str, review_url: &str, pr_name: &str) {
+        tracing::debug!(
+            email = %email,
+            review_url = %review_url,
+            pr_name = %pr_name,
+            "NoopMailer: skipping review ready email"
+        );
+    }
+
+    async fn send_review_failed(&self, email: &str, pr_name: &str, review_id: &str) {
+        tracing::debug!(
+            email = %email,
+            pr_name = %pr_name,
+            review_id = %review_id,
+            "NoopMailer: skipping review failed email"
+        );
+    }
+}
+
 pub struct LoopsMailer {
     client: reqwest::Client,
     api_key: String,

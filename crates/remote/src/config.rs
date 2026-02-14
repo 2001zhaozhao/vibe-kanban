@@ -18,6 +18,7 @@ pub struct RemoteServerConfig {
     pub review_worker_base_url: Option<String>,
     pub review_disabled: bool,
     pub github_app: Option<GitHubAppConfig>,
+    pub single_user_mode: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -199,6 +200,10 @@ pub enum ConfigError {
 
 impl RemoteServerConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
+        let single_user_mode = env::var("VIBEKANBAN_SINGLE_USER_MODE")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
         let database_url = env::var("SERVER_DATABASE_URL")
             .or_else(|_| env::var("DATABASE_URL"))
             .map_err(|_| ConfigError::MissingVar("SERVER_DATABASE_URL"))?;
@@ -208,7 +213,7 @@ impl RemoteServerConfig {
 
         let server_public_base_url = env::var("SERVER_PUBLIC_BASE_URL").ok();
 
-        let auth = AuthConfig::from_env()?;
+        let auth = AuthConfig::from_env(single_user_mode)?;
 
         let electric_url =
             env::var("ELECTRIC_URL").map_err(|_| ConfigError::MissingVar("ELECTRIC_URL"))?;
@@ -245,6 +250,7 @@ impl RemoteServerConfig {
             review_worker_base_url,
             review_disabled,
             github_app,
+            single_user_mode,
         })
     }
 }
@@ -281,7 +287,7 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-    fn from_env() -> Result<Self, ConfigError> {
+    fn from_env(single_user_mode: bool) -> Result<Self, ConfigError> {
         let jwt_secret = env::var("VIBEKANBAN_REMOTE_JWT_SECRET")
             .map_err(|_| ConfigError::MissingVar("VIBEKANBAN_REMOTE_JWT_SECRET"))?;
         validate_jwt_secret(&jwt_secret)?;
@@ -311,7 +317,7 @@ impl AuthConfig {
             _ => None,
         };
 
-        if github.is_none() && google.is_none() {
+        if github.is_none() && google.is_none() && !single_user_mode {
             return Err(ConfigError::NoOAuthProviders);
         }
 

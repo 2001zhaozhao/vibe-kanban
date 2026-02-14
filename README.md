@@ -1,3 +1,15 @@
+# 2001zhaozhao's Vibe-Kanban Fork
+
+A fork of Vibe-Kanban with various improvements.
+
+The improvements are AI-coded with bare minimum quality control, as I don't intend to contribute them.
+The main purpose of this fork is to experiment with building a good development workflow for myself.
+
+* Added a Remote Single-User Mode
+  * Allows skipping GitHub/Google OAuth and support a local account when self-hosting both the remote server,
+    local server, and frontend.
+  * All new Vibe-Kanban features such as organizations, projects, and the kanban board work properly.
+
 <p align="center">
   <a href="https://vibekanban.com">
     <picture>

@@ -54,6 +54,7 @@ pub struct LocalDeployment {
     approvals: Approvals,
     queued_message_service: QueuedMessageService,
     remote_client: Result<RemoteClient, RemoteClientNotConfigured>,
+    single_user_mode: bool,
     auth_context: AuthContext,
     oauth_handoffs: Arc<RwLock<HashMap<Uuid, PendingHandoff>>>,
     pty: PtyService,
@@ -163,6 +164,24 @@ impl Deployment for LocalDeployment {
             }
         };
 
+        // Check remote server health for single-user mode flag
+        let single_user_mode = if let Ok(ref client) = remote_client {
+            match client.health().await {
+                Ok(health) => {
+                    if health.single_user_mode {
+                        tracing::info!("Remote server is in single-user mode");
+                    }
+                    health.single_user_mode
+                }
+                Err(e) => {
+                    tracing::warn!(?e, "Failed to check remote health; defaulting single_user_mode to false");
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
         let oauth_handoffs = Arc::new(RwLock::new(HashMap::new()));
 
         // We need to make analytics accessible to the ContainerService
@@ -216,6 +235,7 @@ impl Deployment for LocalDeployment {
             approvals,
             queued_message_service,
             remote_client,
+            single_user_mode,
             auth_context,
             oauth_handoffs,
             pty,
@@ -288,6 +308,10 @@ impl Deployment for LocalDeployment {
 impl LocalDeployment {
     pub fn remote_client(&self) -> Result<RemoteClient, RemoteClientNotConfigured> {
         self.remote_client.clone()
+    }
+
+    pub fn single_user_mode(&self) -> bool {
+        self.single_user_mode
     }
 
     pub async fn get_login_status(&self) -> LoginStatus {

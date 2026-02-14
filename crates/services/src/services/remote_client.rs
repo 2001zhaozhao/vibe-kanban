@@ -10,8 +10,8 @@ use api_types::{
     HandoffRedeemResponse, Issue, ListAttachmentsResponse, ListInvitationsResponse,
     ListIssuesResponse, ListMembersResponse, ListOrganizationsResponse,
     ListProjectStatusesResponse, ListProjectsResponse, MutationResponse, Organization,
-    ProfileResponse, RevokeInvitationRequest, TokenRefreshRequest, TokenRefreshResponse,
-    UpdateIssueRequest, UpdateMemberRoleRequest, UpdateMemberRoleResponse,
+    ProfileResponse, RevokeInvitationRequest, SingleUserLoginResponse, TokenRefreshRequest,
+    TokenRefreshResponse, UpdateIssueRequest, UpdateMemberRoleRequest, UpdateMemberRoleResponse,
     UpdateOrganizationRequest, UpdateWorkspaceRequest, UpsertPullRequestRequest, Workspace,
 };
 use backon::{ExponentialBuilder, Retryable};
@@ -89,6 +89,14 @@ fn map_error_code(code: Option<&str>) -> HandoffErrorCode {
 #[derive(Deserialize)]
 struct ApiErrorResponse {
     error: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoteHealthResponse {
+    pub status: String,
+    pub version: String,
+    #[serde(default)]
+    pub single_user_mode: bool,
 }
 
 /// HTTP client for the remote OAuth server with automatic retries.
@@ -259,6 +267,19 @@ impl RemoteClient {
         invitation_token: &str,
     ) -> Result<GetInvitationResponse, RemoteClientError> {
         self.get_public(&format!("/v1/invitations/{invitation_token}"))
+            .await
+    }
+
+    /// Fetches the remote server health status (public, no auth required).
+    pub async fn health(&self) -> Result<RemoteHealthResponse, RemoteClientError> {
+        self.get_public("/v1/health").await
+    }
+
+    /// Performs single-user login on the remote server (public, no auth required).
+    pub async fn single_user_login(
+        &self,
+    ) -> Result<SingleUserLoginResponse, RemoteClientError> {
+        self.post_public("/v1/auth/single-user/login", None::<&()>)
             .await
     }
 

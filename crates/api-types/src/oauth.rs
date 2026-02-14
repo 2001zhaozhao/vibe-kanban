@@ -70,4 +70,12 @@ pub struct StatusResponse {
     pub profile: Option<ProfileResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub degraded: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub single_user_mode: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, TS)]
+pub struct SingleUserLoginResponse {
+    pub access_token: String,
+    pub refresh_token: String,
 }

@@ -1,5 +1,6 @@
 use axum::{
     Json, Router,
+    extract::State,
     http::{Request, header::HeaderName},
     middleware,
     routing::get,
@@ -51,6 +52,7 @@ pub mod projects;
 mod pull_requests;
 mod review;
 pub mod tags;
+mod single_user;
 mod tokens;
 mod workspaces;
 
@@ -107,7 +109,8 @@ pub fn router(state: AppState) -> Router {
         .merge(tokens::public_router())
         .merge(review::public_router())
         .merge(github_app::public_router())
-        .merge(billing::public_router());
+        .merge(billing::public_router())
+        .merge(single_user::public_router());
 
     let v1_protected = Router::<AppState>::new()
         .merge(identity::router())
@@ -170,12 +173,15 @@ pub fn router(state: AppState) -> Router {
 struct HealthResponse {
     status: &'static str,
     version: &'static str,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    single_user_mode: bool,
 }
 
-async fn health() -> Json<HealthResponse> {
+async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
+        single_user_mode: state.single_user_mode(),
     })
 }
 

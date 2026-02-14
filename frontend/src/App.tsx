@@ -17,6 +17,7 @@ import { SharedAppLayout } from '@/components/ui-new/containers/SharedAppLayout'
 import { usePostHog } from 'posthog-js/react';
 import { usePreviousPath } from '@/hooks/usePreviousPath';
 import { useUiPreferencesScratch } from '@/hooks/useUiPreferencesScratch';
+import { useSingleUserAutoLogin } from '@/hooks/auth/useSingleUserAutoLogin';
 
 import {
   AgentSettings,
@@ -69,6 +70,9 @@ function AppContent() {
 
   // Sync UI preferences with server scratch storage
   useUiPreferencesScratch();
+
+  // Auto-login in single-user mode
+  useSingleUserAutoLogin();
 
   // Handle opt-in/opt-out and user identification when config loads
   useEffect(() => {

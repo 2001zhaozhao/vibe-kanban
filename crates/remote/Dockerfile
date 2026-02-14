@@ -52,7 +52,7 @@ RUN mkdir -p /app/bin
 RUN if [ -z "${FEATURES}" ]; then \
       sed -i '/^billing = {.*vibe-kanban-private.*/d' crates/remote/Cargo.toml; \
       sed -i '/^# private crate for billing/d' crates/remote/Cargo.toml; \
-      sed -i '/^vk-billing = \["dep:billing"\]/d' crates/remote/Cargo.toml; \
+      sed -i 's/^vk-billing = \["dep:billing"\]/vk-billing = []/' crates/remote/Cargo.toml; \
       rm -f crates/remote/Cargo.lock; \
     fi
 

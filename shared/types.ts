@@ -190,7 +190,7 @@ export type ProfileResponse = { user_id: string, username: string | null, email:
 
 export type ProviderProfile = { provider: string, username: string | null, display_name: string | null, email: string | null, avatar_url: string | null, };
 
-export type StatusResponse = { logged_in: boolean, profile: ProfileResponse | null, degraded: boolean | null, };
+export type StatusResponse = { logged_in: boolean, profile: ProfileResponse | null, degraded: boolean | null, single_user_mode: boolean | null, };
 
 export enum MemberRole { ADMIN = "ADMIN", MEMBER = "MEMBER" }
 
@@ -260,7 +260,7 @@ export type UserSystemInfo = { config: Config, analytics_user_id: string, login_
 /**
  * Capabilities supported per executor (e.g., { "CLAUDE_CODE": ["SESSION_FORK"] })
  */
-capabilities: { [key in string]?: Array<BaseAgentCapability> }, executors: { [key in BaseCodingAgent]?: ExecutorConfig }, };
+capabilities: { [key in string]?: Array<BaseAgentCapability> }, single_user_mode: boolean, executors: { [key in BaseCodingAgent]?: ExecutorConfig }, };
 
 export type Environment = { os_type: string, os_version: string, os_architecture: string, bitness: string, };
 

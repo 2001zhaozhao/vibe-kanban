@@ -1225,6 +1225,20 @@ export const oauthApi = {
     const response = await makeRequest('/api/auth/user');
     return handleApiResponse<CurrentUserResponse>(response);
   },
+
+  /** Performs single-user auto-login (only works when remote server is in single-user mode) */
+  singleUserLogin: async (): Promise<void> => {
+    const response = await makeRequest('/api/auth/single-user/login', {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new ApiError(
+        'Single-user login failed',
+        response.status,
+        response
+      );
+    }
+  },
 };
 
 /**
