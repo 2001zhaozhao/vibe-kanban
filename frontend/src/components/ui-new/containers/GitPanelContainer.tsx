@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useActions } from '@/contexts/ActionsContext';
 import { useWorkspaceContext } from '@/contexts/WorkspaceContext';
 import { useUserContext } from '@/contexts/remote/UserContext';
+import { useLinkedIssueContext } from '@/contexts/remote/LinkedIssueContext';
 import { usePush } from '@/hooks/usePush';
 import { useRenameBranch } from '@/hooks/useRenameBranch';
 import { useBranchStatus } from '@/hooks/useBranchStatus';
@@ -12,7 +13,6 @@ import { CommandBarDialog } from '@/components/ui-new/dialogs/CommandBarDialog';
 import { GitPanel, type RepoInfo } from '@/components/ui-new/views/GitPanel';
 import { Actions } from '@/components/ui-new/actions';
 import { attemptsApi } from '@/lib/api';
-import { makeRequest as remoteRequest } from '@/lib/remoteApi';
 import { toast } from 'sonner';
 import type { RepoAction } from '@/components/ui-new/primitives/RepoCard';
 import type {
@@ -21,7 +21,6 @@ import type {
   Merge,
   RepoBranchStatus,
 } from 'shared/types';
-import type { ProjectStatus } from 'shared/remote-types';
 
 export interface GitPanelContainerProps {
   selectedWorkspace: Workspace | undefined;
@@ -207,8 +206,16 @@ export function GitPanelContainer({
     [repoInfos, pushStates]
   );
 
-  // ---- Merge All / Merge All & Complete ----
+  // ---- Merge All / Complete ----
   const userCtx = useUserContext();
+
+  // linkedIssue provides a real-time view of the workspace's linked kanban
+  // issue via ElectricSQL. It drives the Complete button states here, but can
+  // also be used by future features such as:
+  // - Showing the issue's current status/priority in the git panel header
+  // - Updating issue fields (title, assignees) inline from the sidebar
+  // - Triggering status transitions from PR/CI events
+  const linkedIssue = useLinkedIssueContext();
 
   const remoteWorkspace = useMemo(() => {
     if (!selectedWorkspace?.id || !userCtx?.workspaces) return undefined;
@@ -216,8 +223,6 @@ export function GitPanelContainer({
       (w) => w.local_workspace_id === selectedWorkspace.id
     );
   }, [selectedWorkspace?.id, userCtx?.workspaces]);
-
-  const hasLinkedKanbanTask = !!remoteWorkspace?.issue_id;
 
   const mergeableRepos = useMemo(() => {
     return repoInfosWithPushButton.filter((repo) => {
@@ -230,6 +235,25 @@ export function GitPanelContainer({
   }, [repoInfosWithPushButton]);
 
   const hasMergeableRepos = mergeableRepos.length > 0;
+
+  // Compute the complete button state based on linked issue context.
+  // This reacts in real time to ElectricSQL syncs — e.g. if another user
+  // moves the issue to Done on the kanban board, the button instantly
+  // switches to "Already Completed" without polling.
+  //
+  // States:
+  //   'hidden'             — no linked kanban task for this workspace
+  //   'already-done'       — issue is already in the Done column
+  //   'merge-and-complete' — has mergeable repos + issue not done
+  //   'complete-only'      — no mergeable repos + issue not done
+  const completeButtonState = useMemo<
+    'hidden' | 'already-done' | 'merge-and-complete' | 'complete-only'
+  >(() => {
+    if (!remoteWorkspace?.issue_id) return 'hidden';
+    if (linkedIssue?.isIssueAlreadyDone) return 'already-done';
+    if (hasMergeableRepos) return 'merge-and-complete';
+    return 'complete-only';
+  }, [remoteWorkspace?.issue_id, linkedIssue?.isIssueAlreadyDone, hasMergeableRepos]);
 
   const [isMergeAllPending, setIsMergeAllPending] = useState(false);
 
@@ -284,74 +308,38 @@ export function GitPanelContainer({
     }
   }, [selectedWorkspace?.id, isMergeAllPending, mergeableRepos, clearMergedCommitsAhead]);
 
+  /** Mark the linked issue as Done via optimistic update (no REST calls). */
+  const markIssueAsDone = useCallback(() => {
+    if (!linkedIssue?.doneStatus) return;
+    try {
+      linkedIssue.updateIssue({ status_id: linkedIssue.doneStatus.id });
+    } catch (kanbanErr) {
+      console.warn('Failed to update Kanban issue status to Done', kanbanErr);
+      toast.warning('Could not update Kanban status');
+    }
+  }, [linkedIssue]);
+
   const handleMergeAllAndComplete = useCallback(async () => {
     if (!selectedWorkspace?.id || isMergeAllPending) return;
-    if (mergeableRepos.length === 0) {
-      ConfirmDialog.show({
-        title: 'Nothing to Merge',
-        message:
-          'No branches are eligible for merging. Repos must have commits ahead, no open PR, and not target a remote branch.',
-        confirmText: 'OK',
-        showCancelButton: false,
-      });
-      return;
-    }
-    if (!remoteWorkspace?.issue_id || !remoteWorkspace?.project_id) return;
 
     setIsMergeAllPending(true);
     try {
-      // 1. Merge all repos
-      for (const repo of mergeableRepos) {
-        await attemptsApi.merge(selectedWorkspace.id, { repo_id: repo.id });
-      }
-      clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
-
-      // 2. Move Kanban issue to "Done"
-      try {
-        const statusesRes = await remoteRequest(
-          `/v1/project_statuses?project_id=${remoteWorkspace.project_id}`
-        );
-        if (!statusesRes.ok) {
-          console.warn(
-            'Failed to fetch project statuses:',
-            statusesRes.status
-          );
-          throw new Error('Failed to fetch project statuses');
+      // 1. Merge all repos (if any are mergeable)
+      if (mergeableRepos.length > 0) {
+        for (const repo of mergeableRepos) {
+          await attemptsApi.merge(selectedWorkspace.id, { repo_id: repo.id });
         }
-        const body = await statusesRes.json();
-        const statuses: ProjectStatus[] = body.project_statuses ?? [];
-
-        // Prefer a column named "Done", fall back to rightmost column
-        const doneStatus =
-          statuses.find((s) => s.name.toLowerCase() === 'done') ??
-          statuses
-            .filter((s) => !s.hidden)
-            .sort((a, b) => b.sort_order - a.sort_order)[0];
-
-        if (doneStatus) {
-          const patchRes = await remoteRequest(
-            `/v1/issues/${remoteWorkspace.issue_id}`,
-            {
-              method: 'PATCH',
-              body: JSON.stringify({ status_id: doneStatus.id }),
-            }
-          );
-          if (!patchRes.ok) {
-            console.warn(
-              'Failed to update issue status:',
-              patchRes.status
-            );
-            throw new Error('Failed to update issue status');
-          }
-        }
-        toast.success('Branches merged and issue marked as Done');
-      } catch (kanbanErr) {
-        // Non-fatal: merges succeeded, but couldn't update Kanban status
-        console.warn('Failed to update Kanban issue status to Done', kanbanErr);
-        toast.warning(
-          'Branches merged, but could not update Kanban status'
-        );
+        clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
       }
+
+      // 2. Move Kanban issue to "Done" (optimistic via ElectricSQL)
+      markIssueAsDone();
+
+      toast.success(
+        mergeableRepos.length > 0
+          ? 'Branches merged and issue marked as Done'
+          : 'Issue marked as Done'
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to merge all branches';
@@ -369,8 +357,8 @@ export function GitPanelContainer({
     selectedWorkspace?.id,
     isMergeAllPending,
     mergeableRepos,
-    remoteWorkspace,
     clearMergedCommitsAhead,
+    markIssueAsDone,
   ]);
 
   // Handle opening command bar for repo actions
@@ -439,7 +427,7 @@ export function GitPanelContainer({
       onAddRepo={() => console.log('Add repo clicked')}
       onMergeAll={handleMergeAll}
       onMergeAllAndComplete={handleMergeAllAndComplete}
-      hasLinkedKanbanTask={hasLinkedKanbanTask}
+      completeButtonState={completeButtonState}
       isMergeAllPending={isMergeAllPending}
       hasMergeableRepos={hasMergeableRepos}
     />

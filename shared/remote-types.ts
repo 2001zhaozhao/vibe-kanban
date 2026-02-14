@@ -281,6 +281,12 @@ export const ISSUE_REACTIONS_SHAPE = defineShape<IssueCommentReaction>(
   '/v1/shape/issue/{issue_id}/reactions'
 );
 
+export const SINGLE_ISSUE_SHAPE = defineShape<Issue>(
+  'issues',
+  ['issue_id'] as const,
+  '/v1/shape/issue/{issue_id}'
+);
+
 // =============================================================================
 // Mutation Definitions
 // =============================================================================

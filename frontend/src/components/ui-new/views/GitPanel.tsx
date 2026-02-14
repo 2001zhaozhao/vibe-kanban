@@ -30,6 +30,12 @@ export interface RepoInfo {
   isTargetRemote?: boolean;
 }
 
+export type CompleteButtonState =
+  | 'hidden'
+  | 'already-done'
+  | 'merge-and-complete'
+  | 'complete-only';
+
 interface GitPanelProps {
   repos: RepoInfo[];
   workingBranchName: string;
@@ -40,7 +46,7 @@ interface GitPanelProps {
   onAddRepo?: () => void;
   onMergeAll?: () => void;
   onMergeAllAndComplete?: () => void;
-  hasLinkedKanbanTask?: boolean;
+  completeButtonState?: CompleteButtonState;
   isMergeAllPending?: boolean;
   hasMergeableRepos?: boolean;
   className?: string;
@@ -56,7 +62,7 @@ export function GitPanel({
   onMoreClick,
   onMergeAll,
   onMergeAllAndComplete,
-  hasLinkedKanbanTask,
+  completeButtonState = 'hidden',
   isMergeAllPending,
   hasMergeableRepos,
   className,
@@ -102,7 +108,7 @@ export function GitPanel({
             onClick={onMergeAll}
             disabled={isMergeAllPending}
             className={cn(
-              'flex-1 inline-flex items-center justify-center gap-half px-base py-half rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+              'flex-1 inline-flex items-center justify-center gap-half px-base py-half min-h-[50px] rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
               hasMergeableRepos
                 ? 'bg-panel text-normal hover:bg-tertiary'
                 : 'bg-panel/50 text-low hover:bg-panel'
@@ -115,13 +121,38 @@ export function GitPanel({
             )}
             Merge All
           </button>
-          {hasLinkedKanbanTask && (
+          {completeButtonState === 'already-done' && (
+            <button
+              type="button"
+              disabled
+              className="flex-1 inline-flex items-center justify-center gap-half px-base py-half min-h-[50px] rounded-sm text-sm font-medium bg-success/15 text-success cursor-default"
+            >
+              <CheckCircleIcon className="size-icon-xs" weight="fill" />
+              Already Completed
+            </button>
+          )}
+          {completeButtonState === 'complete-only' && (
+            <button
+              type="button"
+              onClick={onMergeAllAndComplete}
+              disabled={isMergeAllPending}
+              className="flex-1 inline-flex items-center justify-center gap-half px-base py-half min-h-[50px] rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-brand/15 text-brand hover:bg-brand/25"
+            >
+              {isMergeAllPending ? (
+                <SpinnerGapIcon className="size-icon-xs animate-spin" />
+              ) : (
+                <CheckCircleIcon className="size-icon-xs" weight="fill" />
+              )}
+              Complete
+            </button>
+          )}
+          {completeButtonState === 'merge-and-complete' && (
             <button
               type="button"
               onClick={onMergeAllAndComplete}
               disabled={isMergeAllPending}
               className={cn(
-                'flex-1 inline-flex items-center justify-center gap-half px-base py-half rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                'flex-1 inline-flex items-center justify-center gap-half px-base py-half min-h-[50px] rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
                 hasMergeableRepos
                   ? 'bg-brand/15 text-brand hover:bg-brand/25'
                   : 'bg-brand/5 text-brand/50 hover:bg-brand/10'

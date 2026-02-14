@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 AS v FROM issues WHERE \"id\" = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "v",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b4eb71a614aaf2a4a3f4be5ffdcfe3bb7b7cbe836678f32b3539e77935cee308"
+}

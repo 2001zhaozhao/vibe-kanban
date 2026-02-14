@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileTreeContainer } from '@/components/ui-new/containers/FileTreeContainer';
 import { ProcessListContainer } from '@/components/ui-new/containers/ProcessListContainer';
@@ -7,6 +8,8 @@ import { TerminalPanelContainer } from '@/components/ui-new/containers/TerminalP
 import { WorkspaceNotesContainer } from '@/components/ui-new/containers/WorkspaceNotesContainer';
 import { useChangesView } from '@/contexts/ChangesViewContext';
 import { useWorkspaceContext } from '@/contexts/WorkspaceContext';
+import { useUserContext } from '@/contexts/remote/UserContext';
+import { LinkedIssueProvider } from '@/contexts/remote/LinkedIssueContext';
 import { ArrowsOutSimpleIcon } from '@phosphor-icons/react';
 import { useLogsPanel } from '@/contexts/LogsPanelContext';
 import type { RepoWithTargetBranch, Workspace } from 'shared/types';
@@ -50,6 +53,15 @@ export function RightSidebar({
   const { setExpanded } = useExpandedAll();
   const isTerminalVisible = useUiPreferencesStore((s) => s.isTerminalVisible);
   const { expandTerminal, isTerminalExpanded } = useLogsPanel();
+
+  // Derive the linked issue/project IDs for the LinkedIssueProvider
+  const userCtx = useUserContext();
+  const remoteWorkspace = useMemo(() => {
+    if (!selectedWorkspace?.id || !userCtx?.workspaces) return undefined;
+    return userCtx.workspaces.find(
+      (w) => w.local_workspace_id === selectedWorkspace.id
+    );
+  }, [selectedWorkspace?.id, userCtx?.workspaces]);
 
   const [changesExpanded] = usePersistedExpanded(
     PERSIST_KEYS.changesSection,
@@ -103,10 +115,22 @@ export function RightSidebar({
         visible: true,
         expanded: gitExpanded,
         content: (
-          <GitPanelContainer
-            selectedWorkspace={selectedWorkspace}
-            repos={repos}
-          />
+          // LinkedIssueProvider gives all children a live view of the
+          // workspace's linked kanban issue + project statuses via
+          // ElectricSQL. Currently consumed by GitPanelContainer for
+          // the Complete button, but any future sidebar component
+          // (e.g. a task details panel, status picker, or activity
+          // feed) can call useLinkedIssueContext() to read/mutate the
+          // linked issue without additional setup.
+          <LinkedIssueProvider
+            issueId={remoteWorkspace?.issue_id}
+            projectId={remoteWorkspace?.project_id}
+          >
+            <GitPanelContainer
+              selectedWorkspace={selectedWorkspace}
+              repos={repos}
+            />
+          </LinkedIssueProvider>
         ),
         actions: [],
       },

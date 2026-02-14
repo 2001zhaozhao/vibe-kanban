@@ -84,6 +84,7 @@ pub fn router() -> Router<AppState> {
             shapes::ISSUE_REACTIONS_SHAPE.url,
             get(proxy_issue_comment_reactions),
         )
+        .route(shapes::SINGLE_ISSUE_SHAPE.url, get(proxy_single_issue))
 }
 
 async fn proxy_projects(
@@ -413,6 +414,25 @@ async fn proxy_issue_comment_reactions(
     proxy_table(
         &state,
         &shapes::ISSUE_REACTIONS_SHAPE,
+        &query.params,
+        &[issue_id.to_string()],
+    )
+    .await
+}
+
+async fn proxy_single_issue(
+    State(state): State<AppState>,
+    Extension(ctx): Extension<RequestContext>,
+    Path(issue_id): Path<Uuid>,
+    Query(query): Query<ShapeQuery>,
+) -> Result<Response, ProxyError> {
+    organization_members::assert_issue_access(state.pool(), issue_id, ctx.user.id)
+        .await
+        .map_err(|e| ProxyError::Authorization(e.to_string()))?;
+
+    proxy_table(
+        &state,
+        &shapes::SINGLE_ISSUE_SHAPE,
         &query.params,
         &[issue_id.to_string()],
     )

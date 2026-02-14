@@ -149,6 +149,23 @@ pub const ISSUE_REACTIONS_SHAPE: ShapeDefinition<IssueCommentReaction> = crate::
     params: ["issue_id"],
 );
 
+/// Syncs a single issue by ID. Used by the frontend's `LinkedIssueProvider` to
+/// give workspace-scoped components (e.g. the git panel) a live view of the
+/// linked kanban issue without loading the entire project board.
+///
+/// Future integrations can build on this to surface more linked-issue data
+/// inside the workspace sidebar, such as:
+/// - Displaying the issue's current status/priority badge next to the task name
+/// - Showing assignees or due-date warnings in the workspace header
+/// - Enabling inline issue field edits (title, description) from the sidebar
+/// - Driving automated status transitions based on CI/CD or PR events
+pub const SINGLE_ISSUE_SHAPE: ShapeDefinition<Issue> = crate::define_shape!(
+    table: "issues",
+    where_clause: r#""id" = $1"#,
+    url: "/shape/issue/{issue_id}",
+    params: ["issue_id"],
+);
+
 // =============================================================================
 // Export
 // =============================================================================
@@ -179,5 +196,6 @@ pub fn all_shapes() -> Vec<(&'static str, &'static dyn ShapeExport)> {
         PROJECT_ATTACHMENTS_SHAPE,
         ISSUE_COMMENTS_SHAPE,
         ISSUE_REACTIONS_SHAPE,
+        SINGLE_ISSUE_SHAPE,
     ]
 }
