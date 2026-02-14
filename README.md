@@ -3,12 +3,26 @@
 A fork of Vibe-Kanban with various improvements.
 
 The improvements are AI-coded with bare minimum quality control, as I don't intend to contribute them.
-The main purpose of this fork is to experiment with building a good development workflow for myself.
+The main purpose of this fork is to experiment with AI development workflows that let me manage agents at a
+higher level while preserving high code quality and control.
+
+## Improvements
 
 * Added a Remote Single-User Mode
   * Allows skipping GitHub/Google OAuth and support a local account when self-hosting both the remote server,
     local server, and frontend.
   * All new Vibe-Kanban features such as organizations, projects, and the kanban board work properly.
+
+## Long-term goal of the fork
+
+Eventually, I would like to experiment with agent orchestration systems that use vibe-kanban as the
+task sharing UI to give humans visibility and high-level control of the agent team's workflow.
+
+I think that effective quality-control by humans at the highest possible "managerial" level is the key to building an
+effective agent swarm architecture that saves human time without going off the rails, and UI is a very important
+piece of the puzzle which I would like to experiment with by forking vibe-kanban.
+Basically I want to build better UIs that let the human more effectively play the role of a manager of
+a team of coding agents.
 
 <p align="center">
   <a href="https://vibekanban.com">
