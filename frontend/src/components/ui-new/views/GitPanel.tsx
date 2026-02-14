@@ -1,4 +1,9 @@
-import { GitBranchIcon } from '@phosphor-icons/react';
+import {
+  GitBranchIcon,
+  GitMergeIcon,
+  CheckCircleIcon,
+  SpinnerGapIcon,
+} from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
@@ -33,6 +38,11 @@ interface GitPanelProps {
   onPushClick?: (repoId: string) => void;
   onMoreClick?: (repoId: string) => void;
   onAddRepo?: () => void;
+  onMergeAll?: () => void;
+  onMergeAllAndComplete?: () => void;
+  hasLinkedKanbanTask?: boolean;
+  isMergeAllPending?: boolean;
+  hasMergeableRepos?: boolean;
   className?: string;
   error?: string | null;
 }
@@ -44,6 +54,11 @@ export function GitPanel({
   onActionsClick,
   onPushClick,
   onMoreClick,
+  onMergeAll,
+  onMergeAllAndComplete,
+  hasLinkedKanbanTask,
+  isMergeAllPending,
+  hasMergeableRepos,
   className,
   error,
 }: GitPanelProps) {
@@ -81,6 +96,46 @@ export function GitPanel({
             onMoreClick={() => onMoreClick?.(repo.id)}
           />
         ))}
+        <div className="flex gap-half py-half">
+          <button
+            type="button"
+            onClick={onMergeAll}
+            disabled={isMergeAllPending}
+            className={cn(
+              'flex-1 inline-flex items-center justify-center gap-half px-base py-half rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+              hasMergeableRepos
+                ? 'bg-panel text-normal hover:bg-tertiary'
+                : 'bg-panel/50 text-low hover:bg-panel'
+            )}
+          >
+            {isMergeAllPending ? (
+              <SpinnerGapIcon className="size-icon-xs animate-spin" />
+            ) : (
+              <GitMergeIcon className="size-icon-xs" weight="bold" />
+            )}
+            Merge All
+          </button>
+          {hasLinkedKanbanTask && (
+            <button
+              type="button"
+              onClick={onMergeAllAndComplete}
+              disabled={isMergeAllPending}
+              className={cn(
+                'flex-1 inline-flex items-center justify-center gap-half px-base py-half rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                hasMergeableRepos
+                  ? 'bg-brand/15 text-brand hover:bg-brand/25'
+                  : 'bg-brand/5 text-brand/50 hover:bg-brand/10'
+              )}
+            >
+              {isMergeAllPending ? (
+                <SpinnerGapIcon className="size-icon-xs animate-spin" />
+              ) : (
+                <CheckCircleIcon className="size-icon-xs" weight="fill" />
+              )}
+              Merge &amp; Complete
+            </button>
+          )}
+        </div>
         <div className="bg-primary flex flex-col gap-base w-full p-base rounded-sm my-base">
           <div className="flex gap-base items-center">
             <GitBranchIcon className="size-icon-md text-base" weight="fill" />

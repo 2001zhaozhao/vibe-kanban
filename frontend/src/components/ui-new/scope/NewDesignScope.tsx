@@ -15,6 +15,7 @@ import { LogsPanelProvider } from '@/contexts/LogsPanelContext';
 import NiceModal from '@ebay/nice-modal-react';
 import { useKeyShowHelp, Scope } from '@/keyboard';
 import { KeyboardShortcutsDialog } from '@/components/ui-new/dialogs/KeyboardShortcutsDialog';
+import { Toaster } from 'sonner';
 import '@/styles/new/index.css';
 
 interface NewDesignScopeProps {
@@ -72,6 +73,18 @@ export function NewDesignScope({ children }: NewDesignScopeProps) {
                   <ActionsProvider>
                     <SequenceTrackerProvider>
                       <SequenceIndicator />
+                      <Toaster
+                        richColors
+                        toastOptions={{
+                          style: {
+                            background: 'hsl(var(--bg-panel))',
+                            color: 'hsl(var(--text-normal))',
+                            border: '1px solid hsl(var(--border))',
+                            fontFamily:
+                              '"IBM Plex Sans", "Noto Emoji", sans-serif',
+                          },
+                        }}
+                      />
                       <NiceModal.Provider>
                         <KeyboardShortcutsHandler />
                         {children}
