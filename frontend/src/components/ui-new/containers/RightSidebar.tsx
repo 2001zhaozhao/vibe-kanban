@@ -4,6 +4,7 @@ import { FileTreeContainer } from '@/components/ui-new/containers/FileTreeContai
 import { ProcessListContainer } from '@/components/ui-new/containers/ProcessListContainer';
 import { PreviewControlsContainer } from '@/components/ui-new/containers/PreviewControlsContainer';
 import { GitPanelContainer } from '@/components/ui-new/containers/GitPanelContainer';
+import { IssueSectionContainer } from '@/components/ui-new/containers/IssueSectionContainer';
 import { TerminalPanelContainer } from '@/components/ui-new/containers/TerminalPanelContainer';
 import { WorkspaceNotesContainer } from '@/components/ui-new/containers/WorkspaceNotesContainer';
 import { useChangesView } from '@/contexts/ChangesViewContext';
@@ -34,6 +35,7 @@ type SectionDef = {
   expanded: boolean;
   content: React.ReactNode;
   actions: SectionAction[];
+  collapsible: boolean;
 };
 
 export interface RightSidebarProps {
@@ -63,6 +65,12 @@ export function RightSidebar({
     );
   }, [selectedWorkspace?.id, userCtx?.workspaces]);
 
+  const hasLinkedIssue = !!remoteWorkspace?.issue_id;
+
+  const [issueExpanded] = usePersistedExpanded(
+    PERSIST_KEYS.issueSection,
+    true
+  );
   const [changesExpanded] = usePersistedExpanded(
     PERSIST_KEYS.changesSection,
     true
@@ -110,29 +118,31 @@ export function RightSidebar({
   function buildWorkspaceSections(): SectionDef[] {
     const result: SectionDef[] = [
       {
+        title: 'Issue',
+        persistKey: PERSIST_KEYS.issueSection,
+        visible: hasLinkedIssue,
+        expanded: issueExpanded,
+        content: (
+          <IssueSectionContainer
+            projectId={remoteWorkspace?.project_id}
+          />
+        ),
+        actions: [],
+        collapsible: false,
+      },
+      {
         title: 'Git',
         persistKey: PERSIST_KEYS.gitPanelRepositories,
         visible: true,
         expanded: gitExpanded,
         content: (
-          // LinkedIssueProvider gives all children a live view of the
-          // workspace's linked kanban issue + project statuses via
-          // ElectricSQL. Currently consumed by GitPanelContainer for
-          // the Complete button, but any future sidebar component
-          // (e.g. a task details panel, status picker, or activity
-          // feed) can call useLinkedIssueContext() to read/mutate the
-          // linked issue without additional setup.
-          <LinkedIssueProvider
-            issueId={remoteWorkspace?.issue_id}
-            projectId={remoteWorkspace?.project_id}
-          >
-            <GitPanelContainer
-              selectedWorkspace={selectedWorkspace}
-              repos={repos}
-            />
-          </LinkedIssueProvider>
+          <GitPanelContainer
+            selectedWorkspace={selectedWorkspace}
+            repos={repos}
+          />
         ),
         actions: [],
+        collapsible: true,
       },
       {
         title: 'Terminal',
@@ -141,6 +151,7 @@ export function RightSidebar({
         expanded: terminalExpanded,
         content: <TerminalPanelContainer />,
         actions: [{ icon: ArrowsOutSimpleIcon, onClick: expandTerminal }],
+        collapsible: true,
       },
       {
         title: t('common:sections.notes'),
@@ -149,6 +160,7 @@ export function RightSidebar({
         expanded: notesExpanded,
         content: <WorkspaceNotesContainer />,
         actions: [],
+        collapsible: true,
       },
     ];
 
@@ -173,6 +185,7 @@ export function RightSidebar({
               />
             ),
             actions: [],
+            collapsible: true,
           });
         }
         break;
@@ -184,6 +197,7 @@ export function RightSidebar({
           expanded: upperExpanded,
           content: <ProcessListContainer />,
           actions: [],
+          collapsible: true,
         });
         break;
       case RIGHT_MAIN_PANEL_MODES.PREVIEW:
@@ -200,6 +214,7 @@ export function RightSidebar({
               />
             ),
             actions: [],
+            collapsible: true,
           });
         }
         break;
@@ -212,27 +227,39 @@ export function RightSidebar({
 
   return (
     <div className="h-full border-l bg-secondary overflow-y-auto">
-      <div className="divide-y border-b">
-        {sections
-          .filter((section) => section.visible)
-          .map((section) => (
-            <div
-              key={section.persistKey}
-              className="max-h-[max(50vh,400px)] flex flex-col overflow-hidden"
-            >
-              <CollapsibleSectionHeader
-                title={section.title}
-                persistKey={section.persistKey}
-                defaultExpanded={section.expanded}
-                actions={section.actions}
+      <LinkedIssueProvider
+        issueId={remoteWorkspace?.issue_id}
+        projectId={remoteWorkspace?.project_id}
+      >
+        <div className="divide-y border-b">
+          {sections
+            .filter((section) => section.visible)
+            .map((section) => (
+              <div
+                key={section.persistKey}
+                className="max-h-[max(50vh,400px)] flex flex-col overflow-hidden"
               >
-                <div className="flex flex-1 border-t min-h-[200px] w-full overflow-auto">
-                  {section.content}
-                </div>
-              </CollapsibleSectionHeader>
-            </div>
-          ))}
-      </div>
+                <CollapsibleSectionHeader
+                  title={section.title}
+                  persistKey={section.persistKey}
+                  defaultExpanded={section.expanded}
+                  actions={section.actions}
+                  collapsible={section.collapsible}
+                >
+                  <div
+                    className={
+                      section.collapsible
+                        ? 'flex flex-1 border-t min-h-[200px] w-full overflow-auto'
+                        : 'flex flex-1 border-t min-h-px w-full overflow-auto'
+                    }
+                  >
+                    {section.content}
+                  </div>
+                </CollapsibleSectionHeader>
+              </div>
+            ))}
+        </div>
+      </LinkedIssueProvider>
     </div>
   );
 }
