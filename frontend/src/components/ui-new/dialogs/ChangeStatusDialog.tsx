@@ -16,6 +16,7 @@ import {
   useProjectContext,
 } from '@/contexts/remote/ProjectContext';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export interface ChangeStatusDialogProps {
   projectId: string;
@@ -53,6 +54,15 @@ function ChangeStatusDialogContent({
     for (const issueId of issueIds) {
       updateIssue(issueId, { status_id: selectedStatusId });
     }
+
+    const statusName =
+      sortedStatuses.find((s) => s.id === selectedStatusId)?.name ?? 'status';
+    if (issueIds.length === 1) {
+      toast.success(`Issue moved to ${statusName}`);
+    } else {
+      toast.success(`${issueIds.length} issues moved to ${statusName}`);
+    }
+
     modal.hide();
   };
 

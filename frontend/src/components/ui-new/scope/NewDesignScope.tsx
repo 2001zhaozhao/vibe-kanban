@@ -16,6 +16,7 @@ import NiceModal from '@ebay/nice-modal-react';
 import { useKeyShowHelp, Scope } from '@/keyboard';
 import { KeyboardShortcutsDialog } from '@/components/ui-new/dialogs/KeyboardShortcutsDialog';
 import { Toaster } from 'sonner';
+import { useAgentCompletionToast } from '@/components/ui-new/hooks/useAgentCompletionToast';
 import '@/styles/new/index.css';
 
 interface NewDesignScopeProps {
@@ -37,6 +38,12 @@ function ExecutionProcessesProviderWrapper({
       {children}
     </ExecutionProcessesProvider>
   );
+}
+
+function AgentCompletionToastHandler() {
+  const { activeWorkspaces } = useWorkspaceContext();
+  useAgentCompletionToast(activeWorkspaces);
+  return null;
 }
 
 function KeyboardShortcutsHandler() {
@@ -67,6 +74,7 @@ export function NewDesignScope({ children }: NewDesignScopeProps) {
       {container && (
         <PortalContainerContext.Provider value={container}>
           <WorkspaceProvider>
+            <AgentCompletionToastHandler />
             <ExecutionProcessesProviderWrapper>
               <LogsPanelProvider>
                 <UserProvider>

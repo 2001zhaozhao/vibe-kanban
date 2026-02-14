@@ -78,6 +78,7 @@ import { getIdeName } from '@/components/ide/IdeIcon';
 import { EditorSelectionDialog } from '@/components/dialogs/tasks/EditorSelectionDialog';
 import { StartReviewDialog } from '@/components/dialogs/tasks/StartReviewDialog';
 import posthog from 'posthog-js';
+import { toast } from 'sonner';
 import { WorkspacesGuideDialog } from '@/components/ui-new/dialogs/WorkspacesGuideDialog';
 import { ProjectsGuideDialog } from '@/components/ui-new/dialogs/ProjectsGuideDialog';
 import { SettingsDialog } from '@/components/ui-new/dialogs/SettingsDialog';
@@ -1077,8 +1078,14 @@ export const Actions = {
       });
 
       if (confirmResult === 'confirmed') {
-        await attemptsApi.merge(workspaceId, { repo_id: repoId });
-        invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
+        try {
+          await attemptsApi.merge(workspaceId, { repo_id: repoId });
+          invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
+          toast.success('Branch merged successfully');
+        } catch (err) {
+          console.error('Failed to merge branch:', err);
+          toast.error('Failed to merge branch');
+        }
       }
     },
   },

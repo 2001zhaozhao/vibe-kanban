@@ -16,6 +16,7 @@ import { useKanbanFilters, PRIORITY_ORDER } from '@/hooks/useKanbanFilters';
 import { bulkUpdateIssues, type BulkUpdateIssueItem } from '@/lib/remoteApi';
 import { useKanbanNavigation } from '@/hooks/useKanbanNavigation';
 import { PlusIcon, DotsThreeIcon } from '@phosphor-icons/react';
+import { toast } from 'sonner';
 import { Actions } from '@/components/ui-new/actions';
 import type { OrganizationMemberWithProfile } from 'shared/types';
 import {
@@ -659,8 +660,18 @@ export function KanbanContainer() {
       // Perform bulk update
       isSyncingRef.current = true;
       bulkUpdateIssues(updates)
+        .then(() => {
+          if (isCrossColumn) {
+            const statusName =
+              statuses.find((s) => s.id === destId)?.name ?? 'status';
+            toast.success(`Issue moved to ${statusName}`);
+          }
+        })
         .catch((err) => {
           console.error('Failed to bulk update sort order:', err);
+          if (isCrossColumn) {
+            toast.error('Failed to move issue');
+          }
         })
         .finally(() => {
           // Delay clearing flag to let Electric sync complete
@@ -669,7 +680,7 @@ export function KanbanContainer() {
           }, 500);
         });
     },
-    [kanbanFilters.sortField, calculateSortOrder]
+    [kanbanFilters.sortField, calculateSortOrder, statuses]
   );
 
   const handleCardClick = useCallback(

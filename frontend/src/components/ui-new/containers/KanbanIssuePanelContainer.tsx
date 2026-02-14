@@ -20,6 +20,7 @@ import {
   type IssueFormData,
 } from '@/components/ui-new/views/KanbanIssuePanel';
 import { useActions } from '@/contexts/ActionsContext';
+import { toast } from 'sonner';
 import { useUserContext } from '@/contexts/remote/UserContext';
 import { useWorkspaceContext } from '@/contexts/WorkspaceContext';
 import { CommandBarDialog } from '@/components/ui-new/dialogs/CommandBarDialog';
@@ -869,6 +870,7 @@ export function KanbanIssuePanelContainer() {
           if (!draftId) {
             openIssue(syncedIssue.id);
           }
+          toast.success('Issue created');
           return; // Don't open issue panel since we're navigating away
         }
 
@@ -878,6 +880,7 @@ export function KanbanIssuePanelContainer() {
 
         // Open the newly created issue
         openIssue(syncedIssue.id);
+        toast.success('Issue created');
       } else {
         // Update existing issue - would use update mutation
         // For now, just close the panel
@@ -885,6 +888,7 @@ export function KanbanIssuePanelContainer() {
       }
     } catch (error) {
       console.error('Failed to save issue:', error);
+      toast.error('Failed to create issue');
     } finally {
       setIsSubmitting(false);
     }
