@@ -19,6 +19,30 @@ pub struct RemoteServerConfig {
     pub review_disabled: bool,
     pub github_app: Option<GitHubAppConfig>,
     pub single_user_mode: bool,
+    pub tls: Option<TlsConfig>,
+}
+
+/// Optional TLS configuration for HTTPS + HTTP/2 support.
+/// When both TLS_CERT_PATH and TLS_KEY_PATH are set, the server uses
+/// HTTPS with automatic HTTP/2 negotiation via ALPN.
+#[derive(Debug, Clone)]
+pub struct TlsConfig {
+    pub cert_path: String,
+    pub key_path: String,
+}
+
+impl TlsConfig {
+    pub fn from_env() -> Option<Self> {
+        let cert_path = env::var("TLS_CERT_PATH").ok()?;
+        let key_path = env::var("TLS_KEY_PATH").ok()?;
+        if cert_path.is_empty() || key_path.is_empty() {
+            return None;
+        }
+        Some(Self {
+            cert_path,
+            key_path,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -237,6 +261,8 @@ impl RemoteServerConfig {
 
         let github_app = GitHubAppConfig::from_env()?;
 
+        let tls = TlsConfig::from_env();
+
         Ok(Self {
             database_url,
             listen_addr,
@@ -251,6 +277,7 @@ impl RemoteServerConfig {
             review_disabled,
             github_app,
             single_user_mode,
+            tls,
         })
     }
 }

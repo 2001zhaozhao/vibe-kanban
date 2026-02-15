@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, bail};
 use secrecy::ExposeSecret;
@@ -203,17 +203,38 @@ impl Server {
             .listen_addr
             .parse()
             .context("listen address is invalid")?;
-        let tcp_listener = tokio::net::TcpListener::bind(addr)
+
+        if let Some(tls_config) = &config.tls {
+            // HTTPS + HTTP/2 mode: use axum-server with rustls for automatic
+            // HTTP/2 negotiation via ALPN. This eliminates the browser's
+            // ~6 connection-per-origin limit that causes long-poll starvation.
+            let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
+                PathBuf::from(&tls_config.cert_path),
+                PathBuf::from(&tls_config.key_path),
+            )
             .await
-            .context("failed to bind tcp listener")?;
+            .context("failed to load TLS certificates")?;
 
-        tracing::info!(%addr, "shared sync server listening");
+            tracing::info!(%addr, "shared sync server listening (HTTPS + HTTP/2)");
 
-        let make_service = router.into_make_service();
+            axum_server::bind_rustls(addr, rustls_config)
+                .serve(router.into_make_service())
+                .await
+                .context("shared sync server failure")?;
+        } else {
+            // Plain HTTP/1.1 mode (default)
+            let tcp_listener = tokio::net::TcpListener::bind(addr)
+                .await
+                .context("failed to bind tcp listener")?;
 
-        axum::serve(tcp_listener, make_service)
-            .await
-            .context("shared sync server failure")?;
+            tracing::info!(%addr, "shared sync server listening (HTTP/1.1)");
+
+            let make_service = router.into_make_service();
+
+            axum::serve(tcp_listener, make_service)
+                .await
+                .context("shared sync server failure")?;
+        }
 
         Ok(())
     }

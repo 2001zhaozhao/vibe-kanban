@@ -23,6 +23,40 @@ higher level while preserving high code quality and control.
     when an issue is moved between categories by user action; and when an agent completes
     (which previously only played sound).
 * You can now see basic information of the linked issue from the Workspace UI
+* Added TLS support for the local development remote server, enabling HTTP/2 and removing a browser concurrent
+  connections limit issue that caused unusable performance when running the original `vibe-kanban` setup locally.
+  Additional setup is required, see the `TLS Setup Guide` section below.
+
+## TLS Setup Guide
+
+This fork includes a feature to allow local development without slowdowns by enabling HTTP/2 for the remote dev server.
+HTTP/2 requires TLS so you need to follow the below guide to set up a local certificate via `mkcert`.
+Without this, the server would use plain-HTTP with HTTP 1.1, which causes ElectricSQL's long-polling sync requests
+to block each other due to the browser's 6 concurrent connection limit in HTTP 1.1.
+(This is an issue in vanilla vibe-kanban which is fixed in this fork.)
+
+Setup guide from Claude:
+```
+One-time setup with https://github.com/FiloSottile/mkcert:
+
+# Install mkcert (once)
+# macOS: brew install mkcert
+# Linux: see https://github.com/FiloSottile/mkcert#installation
+
+# Install local CA into system trust store (once)
+mkcert -install
+
+# Generate certs for localhost (once)
+cd crates/remote
+mkcert -cert-file localhost-cert.pem -key-file localhost-key.pem localhost 127.0.0.1 ::1
+
+Then add to .env.remote:
+TLS_CERT_PATH=localhost-cert.pem
+TLS_KEY_PATH=localhost-key.pem
+
+And update VK_SHARED_API_BASE to use https://:
+VK_SHARED_API_BASE=https://localhost:3000
+```
 
 ## Long-term goal of the fork
 
