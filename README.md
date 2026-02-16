@@ -26,6 +26,9 @@ higher level while preserving high code quality and control.
 * Added TLS support for the local development remote server, enabling HTTP/2 and removing a browser concurrent
   connections limit issue that caused unusable performance when running the original `vibe-kanban` setup locally.
   Additional setup is required, see the `TLS Setup Guide` section below.
+* Added the ability to right click a workspace card in the Project / Kanban Board page to directly go to the
+  full-screen workspace view. Left click still shows a preview of the workspace just like before.
+* 
 
 ## TLS Setup Guide
 

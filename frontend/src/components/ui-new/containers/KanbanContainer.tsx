@@ -1,5 +1,6 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useProjectContext } from '@/contexts/remote/ProjectContext';
 import { useOrgContext } from '@/contexts/remote/OrgContext';
 import { useWorkspaceContext } from '@/contexts/WorkspaceContext';
@@ -99,6 +100,7 @@ function LoadingState() {
  */
 export function KanbanContainer() {
   const { t } = useTranslation('common');
+  const navigate = useNavigate();
 
   // Get data from contexts (set up by WorkspacesLayout)
   const {
@@ -942,6 +944,14 @@ export function KanbanContainer() {
                                             openIssueWorkspace(
                                               issue.id,
                                               workspace.localWorkspaceId!
+                                            )
+                                        : undefined
+                                    }
+                                    onContextMenu={
+                                      workspace.localWorkspaceId
+                                        ? () =>
+                                            navigate(
+                                              `/workspaces/${workspace.localWorkspaceId}`
                                             )
                                         : undefined
                                     }

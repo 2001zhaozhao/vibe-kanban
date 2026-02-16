@@ -192,6 +192,14 @@ export function IssueWorkspacesSectionContainer({
     [openIssueWorkspace, issueId]
   );
 
+  // Handle right-clicking a workspace card to navigate directly to full workspace view
+  const handleWorkspaceRightClick = useCallback(
+    (localWorkspaceId: string) => {
+      navigate(`/workspaces/${localWorkspaceId}`);
+    },
+    [navigate]
+  );
+
   // Handle unlinking a workspace from the issue
   const handleUnlinkWorkspace = useCallback(
     async (localWorkspaceId: string) => {
@@ -285,6 +293,7 @@ export function IssueWorkspacesSectionContainer({
       isLoading={isLoading}
       actions={actions}
       onWorkspaceClick={handleWorkspaceClick}
+      onWorkspaceRightClick={handleWorkspaceRightClick}
       onCreateWorkspace={handleAddWorkspace}
       onUnlinkWorkspace={handleUnlinkWorkspace}
       onDeleteWorkspace={handleDeleteWorkspace}

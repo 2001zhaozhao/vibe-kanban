@@ -49,6 +49,7 @@ export interface WorkspaceWithStats {
 export interface IssueWorkspaceCardProps {
   workspace: WorkspaceWithStats;
   onClick?: () => void;
+  onContextMenu?: () => void;
   onUnlink?: () => void;
   onDelete?: () => void;
   showOwner?: boolean;
@@ -65,12 +66,14 @@ export interface IssueWorkspaceCreateCardProps {
 
 interface IssueWorkspaceCardContainerProps {
   onClick?: () => void;
+  onContextMenu?: () => void;
   className?: string;
   children: React.ReactNode;
 }
 
 function IssueWorkspaceCardContainer({
   onClick,
+  onContextMenu,
   className,
   children,
 }: IssueWorkspaceCardContainerProps) {
@@ -86,6 +89,15 @@ function IssueWorkspaceCardContainer({
           ? (e) => {
               e.stopPropagation();
               onClick();
+            }
+          : undefined
+      }
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu();
             }
           : undefined
       }
@@ -111,6 +123,7 @@ function IssueWorkspaceCardContainer({
 export function IssueWorkspaceCard({
   workspace,
   onClick,
+  onContextMenu,
   onUnlink,
   onDelete,
   showOwner = true,
@@ -136,7 +149,7 @@ export function IssueWorkspaceCard({
     (hasUnseenActivity && !isRunning);
 
   return (
-    <IssueWorkspaceCardContainer onClick={onClick} className={className}>
+    <IssueWorkspaceCardContainer onClick={onClick} onContextMenu={onContextMenu} className={className}>
       {/* Row 1: Status badge + Name (left), Owner avatar + menu (right) */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-half min-w-0">
