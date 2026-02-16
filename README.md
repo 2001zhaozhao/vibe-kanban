@@ -4,7 +4,8 @@ A fork of Vibe-Kanban with various improvements.
 
 The improvements are AI-coded with bare minimum quality control, as I don't intend to contribute them.
 The main purpose of this fork is to experiment with AI development workflows that let me manage agents at a
-higher level while preserving high code quality and control.
+higher level while preserving high code quality through manual oversight.
+My aim is to push the human-in-the-loop AI development workflow as far as possible.
 
 ## Improvements
 
