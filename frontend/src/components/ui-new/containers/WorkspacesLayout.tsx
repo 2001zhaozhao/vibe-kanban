@@ -115,7 +115,7 @@ export function WorkspacesLayout() {
 
   const mainContent = (
     <ReviewProvider attemptId={selectedWorkspace?.id}>
-      <LogsPanelProvider>
+      <LogsPanelProvider key={selectedWorkspace?.id}>
         <ChangesViewProvider>
           <div className="flex h-full">
             <Group
