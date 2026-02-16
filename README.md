@@ -28,7 +28,8 @@ higher level while preserving high code quality and control.
   Additional setup is required, see the `TLS Setup Guide` section below.
 * Added the ability to right click a workspace card in the Project / Kanban Board page to directly go to the
   full-screen workspace view. Left click still shows a preview of the workspace just like before.
-* 
+* Fixed a bug where agent logs from one workspace appears to show up in another workspace if directly switching between
+  workspace previews in the Kanban pag
 
 ## TLS Setup Guide
 
