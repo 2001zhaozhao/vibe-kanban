@@ -167,7 +167,7 @@ export function RightSidebar({
     switch (rightMainPanelMode) {
       case RIGHT_MAIN_PANEL_MODES.CHANGES:
         if (selectedWorkspace) {
-          result.unshift({
+          result.splice(1, 0, {
             title: 'Changes',
             persistKey: PERSIST_KEYS.changesSection,
             visible: hasUpperContent,
@@ -190,7 +190,7 @@ export function RightSidebar({
         }
         break;
       case RIGHT_MAIN_PANEL_MODES.LOGS:
-        result.unshift({
+        result.splice(1, 0, {
           title: 'Logs',
           persistKey: PERSIST_KEYS.rightPanelprocesses,
           visible: hasUpperContent,
@@ -202,7 +202,7 @@ export function RightSidebar({
         break;
       case RIGHT_MAIN_PANEL_MODES.PREVIEW:
         if (selectedWorkspace) {
-          result.unshift({
+          result.splice(1, 0, {
             title: 'Preview',
             persistKey: PERSIST_KEYS.rightPanelPreview,
             visible: hasUpperContent,
