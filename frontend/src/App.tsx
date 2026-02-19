@@ -7,16 +7,6 @@ import { usePostHog } from 'posthog-js/react';
 import { usePreviousPath } from '@/hooks/usePreviousPath';
 import { useUiPreferencesScratch } from '@/hooks/useUiPreferencesScratch';
 import { useSingleUserAutoLogin } from '@/hooks/auth/useSingleUserAutoLogin';
-
-import {
-  AgentSettings,
-  GeneralSettings,
-  McpSettings,
-  OrganizationSettings,
-  ProjectSettings,
-  ReposSettings,
-  SettingsLayout,
-} from '@/pages/settings/';
 import { UserSystemProvider, useUserSystem } from '@/components/ConfigProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
 

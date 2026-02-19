@@ -7,6 +7,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { ExecutionProcessesProvider } from '@/contexts/ExecutionProcessesContext';
 import { CreateModeProvider } from '@/contexts/CreateModeContext';
 import { ReviewProvider } from '@/contexts/ReviewProvider';
+import { LogsPanelProvider } from '@/contexts/LogsPanelContext';
 import { ChangesViewProvider } from '@/contexts/ChangesViewContext';
 import { WorkspacesSidebarContainer } from '@/components/ui-new/containers/WorkspacesSidebarContainer';
 import { LogsContentContainer } from '@/components/ui-new/containers/LogsContentContainer';
@@ -44,7 +45,6 @@ export function WorkspacesLayout() {
     selectSession,
     repos,
     isNewSessionMode,
-    startNewSession,
   } = useWorkspaceContext();
 
   const { t } = useTranslation('common');
@@ -160,7 +160,6 @@ export function WorkspacesLayout() {
                       isLoading={isLoading}
                       isError={isError}
                       isNewSessionMode={isNewSessionMode}
-                      onStartNewSession={startNewSession}
                     />
                   )}
                 </Panel>
