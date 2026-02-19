@@ -35,8 +35,8 @@ use crate::{
     command::{CmdOverrides, CommandBuildError, CommandBuilder, CommandParts, apply_overrides},
     env::ExecutionEnv,
     executors::{
-        AppendPrompt, AvailabilityInfo, ExecutorError, SpawnedChild, StandardCodingAgentExecutor,
-        codex::client::LogWriter, utils::reorder_slash_commands,
+        AppendPrompt, AvailabilityInfo, BaseCodingAgent, ExecutorError, SpawnedChild,
+        StandardCodingAgentExecutor, codex::client::LogWriter, utils::reorder_slash_commands,
     },
     logs::{
         ActionType, FileChange, NormalizedEntry, NormalizedEntryError, NormalizedEntryType,
@@ -45,8 +45,11 @@ use crate::{
         utils::{
             EntryIndexProvider,
             patch::{self, ConversationPatch},
+            shell_command_parsing::CommandCategory,
         },
     },
+    model_selector::PermissionPolicy,
+    profile::ExecutorConfig,
     stdout_dup::create_stdout_pipe_writer,
 };
 
@@ -56,7 +59,7 @@ fn base_command(claude_code_router: bool) -> &'static str {
     if claude_code_router {
         "npx -y @musistudio/claude-code-router@1.0.66 code"
     } else {
-        "npx -y @anthropic-ai/claude-code@2.1.41"
+        "npx -y @anthropic-ai/claude-code@2.1.45"
     }
 }
 
@@ -111,6 +114,8 @@ pub struct ClaudeCode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dangerously_skip_permissions: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disable_api_key: Option<bool>,
@@ -154,6 +159,9 @@ impl ClaudeCode {
         }
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model]);
+        }
+        if let Some(agent) = &self.agent {
+            builder = builder.extend_params(["--agent", agent]);
         }
         builder = builder.extend_params([
             "--verbose",
@@ -218,10 +226,78 @@ impl ClaudeCode {
 
         Some(serde_json::Value::Object(hooks))
     }
+
+    fn compute_cmd_key(&self) -> String {
+        serde_json::to_string(&self.cmd).unwrap_or_default()
+    }
+}
+
+fn default_discovered_options() -> crate::executor_discovery::ExecutorDiscoveredOptions {
+    use crate::{
+        executor_discovery::ExecutorDiscoveredOptions,
+        model_selector::{ModelInfo, ModelSelectorConfig},
+    };
+
+    ExecutorDiscoveredOptions {
+        model_selector: ModelSelectorConfig {
+            providers: vec![],
+            models: [
+                ("claude-opus-4-6", "Opus"),
+                ("claude-opus-4-6[1m]", "Opus (1M context)"),
+                ("claude-haiku-4-5-20251001", "Haiku"),
+                ("claude-sonnet-4-5-20250929", "Sonnet"),
+            ]
+            .into_iter()
+            .map(|(id, name)| ModelInfo {
+                id: id.to_string(),
+                name: name.to_string(),
+                provider_id: None,
+                reasoning_options: vec![],
+            })
+            .collect(),
+            default_model: Some("claude-opus-4-6".to_string()),
+            agents: vec![],
+            permissions: vec![
+                PermissionPolicy::Auto,
+                PermissionPolicy::Supervised,
+                PermissionPolicy::Plan,
+            ],
+        },
+        slash_commands: ClaudeCode::hardcoded_slash_commands(),
+        loading_models: false,
+        loading_agents: false,
+        loading_slash_commands: false,
+        error: None,
+    }
 }
 
 #[async_trait]
 impl StandardCodingAgentExecutor for ClaudeCode {
+    fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
+        if let Some(model_id) = &executor_config.model_id {
+            self.model = Some(model_id.clone());
+        }
+        if let Some(agent) = &executor_config.agent_id {
+            self.agent = Some(agent.clone());
+        }
+        if let Some(permission_policy) = executor_config.permission_policy.clone() {
+            match permission_policy {
+                PermissionPolicy::Plan => {
+                    self.plan = Some(true);
+                    self.approvals = Some(false);
+                }
+                PermissionPolicy::Supervised => {
+                    self.plan = Some(false);
+                    self.approvals = Some(true);
+                }
+                PermissionPolicy::Auto => {
+                    self.plan = Some(false);
+                    self.approvals = Some(false);
+                }
+            }
+        }
+    }
+
     fn use_approvals(&mut self, approvals: Arc<dyn ExecutorApprovalService>) {
         self.approvals_service = Some(approvals);
     }
@@ -276,7 +352,193 @@ impl StandardCodingAgentExecutor for ClaudeCode {
         normalize_claude_stderr_logs(msg_store, entry_index_provider);
     }
 
+    async fn discover_options(
+        &self,
+        workdir: Option<&Path>,
+        repo_path: Option<&Path>,
+    ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        use crate::{
+            executor_discovery::ExecutorConfigCacheKey, executors::utils::executor_options_cache,
+        };
+
+        let cache = executor_options_cache();
+        let cmd_key = self.compute_cmd_key();
+        let base_executor = BaseCodingAgent::ClaudeCode;
+
+        let (target_path, initial_options) = if let Some(wd) = workdir {
+            let wd_buf = wd.to_path_buf();
+            let target_key =
+                ExecutorConfigCacheKey::new(Some(&wd_buf), cmd_key.clone(), base_executor);
+            if let Some(cached) = cache.get(&target_key) {
+                return Ok(Box::pin(futures::stream::once(async move {
+                    patch::executor_discovered_options(cached.as_ref().clone().with_loading(false))
+                })));
+            }
+            let provisional = repo_path
+                .and_then(|rp| {
+                    let rp_buf = rp.to_path_buf();
+                    let repo_key =
+                        ExecutorConfigCacheKey::new(Some(&rp_buf), cmd_key.clone(), base_executor);
+                    cache.get(&repo_key)
+                })
+                .or_else(|| {
+                    let global_key =
+                        ExecutorConfigCacheKey::new(None, cmd_key.clone(), base_executor);
+                    cache.get(&global_key)
+                });
+            (
+                Some(wd.to_path_buf()),
+                provisional
+                    .map(|p| {
+                        let mut opts = p.as_ref().clone();
+                        opts.loading_models = false;
+                        opts.loading_agents = true;
+                        opts.loading_slash_commands = true;
+                        opts
+                    })
+                    .unwrap_or_else(|| {
+                        let mut opts = default_discovered_options();
+                        opts.loading_models = false;
+                        opts.loading_agents = true;
+                        opts.loading_slash_commands = true;
+                        opts
+                    }),
+            )
+        } else if let Some(rp) = repo_path {
+            let rp_buf = rp.to_path_buf();
+            let target_key =
+                ExecutorConfigCacheKey::new(Some(&rp_buf), cmd_key.clone(), base_executor);
+            if let Some(cached) = cache.get(&target_key) {
+                return Ok(Box::pin(futures::stream::once(async move {
+                    patch::executor_discovered_options(cached.as_ref().clone().with_loading(false))
+                })));
+            }
+            let global_key = ExecutorConfigCacheKey::new(None, cmd_key.clone(), base_executor);
+            let provisional = cache.get(&global_key);
+            (
+                Some(rp.to_path_buf()),
+                provisional
+                    .map(|p| {
+                        let mut opts = p.as_ref().clone();
+                        opts.loading_models = false;
+                        opts.loading_agents = true;
+                        opts.loading_slash_commands = true;
+                        opts
+                    })
+                    .unwrap_or_else(|| {
+                        let mut opts = default_discovered_options();
+                        opts.loading_models = false;
+                        opts.loading_agents = true;
+                        opts.loading_slash_commands = true;
+                        opts
+                    }),
+            )
+        } else {
+            let global_key = ExecutorConfigCacheKey::new(None, cmd_key.clone(), base_executor);
+            if let Some(cached) = cache.get(&global_key) {
+                return Ok(Box::pin(futures::stream::once(async move {
+                    patch::executor_discovered_options(cached.as_ref().clone().with_loading(false))
+                })));
+            }
+            let mut opts = default_discovered_options();
+            opts.loading_models = false;
+            opts.loading_agents = true;
+            opts.loading_slash_commands = true;
+            (None, opts)
+        };
+
+        let initial_patch = patch::executor_discovered_options(initial_options);
+
+        let this = self.clone();
+        let cmd_key_for_discovery = cmd_key.clone();
+
+        let discovery_stream = async_stream::stream! {
+            let discovery_path = target_path.as_deref().unwrap_or(Path::new(".")).to_path_buf();
+            let mut final_options = default_discovered_options();
+
+            match this.discover_agents_and_slash_commands_initial(&discovery_path).await {
+                Ok((mut agent_options, slash_commands_initial, plugins)) => {
+                    let default_agents = [
+                        "Bash",
+                        "general-purpose",
+                        "statusline-setup",
+                        "Explore",
+                        "Plan",
+                    ];
+                    agent_options.retain(|a| !default_agents.contains(&a.id.as_str()));
+                    final_options.model_selector.agents = agent_options.clone();
+                    yield patch::update_agents(agent_options);
+                    yield patch::agents_loaded();
+
+                    let defaults = Self::hardcoded_slash_commands();
+                    let slash_commands = reorder_slash_commands(
+                        [slash_commands_initial, defaults].concat()
+                    );
+                    final_options.slash_commands = slash_commands.clone();
+                    yield patch::update_slash_commands(slash_commands);
+
+                    let slash_commands_with_descriptions = Self::fill_slash_command_descriptions(
+                        &discovery_path,
+                        &plugins,
+                        &final_options.slash_commands,
+                    ).await;
+                    final_options.slash_commands = slash_commands_with_descriptions;
+                    yield patch::update_slash_commands(final_options.slash_commands.clone());
+                    yield patch::slash_commands_loaded();
+
+                    let cache = executor_options_cache();
+                    if let Some(path) = &target_path {
+                        let target_cache_key = ExecutorConfigCacheKey::new(
+                            Some(path),
+                            cmd_key_for_discovery.clone(),
+                            BaseCodingAgent::ClaudeCode,
+                        );
+                        cache.put(target_cache_key, final_options.clone());
+                    }
+                    let global_cache_key = ExecutorConfigCacheKey::new(
+                        None,
+                        cmd_key_for_discovery,
+                        BaseCodingAgent::ClaudeCode,
+                    );
+                    cache.put(global_cache_key, final_options);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to discover Claude Code options: {}", e);
+                    yield patch::discovery_error(e.to_string());
+                }
+            }
+        };
+
+        Ok(Box::pin(
+            futures::stream::once(async move { initial_patch }).chain(discovery_stream),
+        ))
+    }
+
+    fn get_preset_options(&self) -> ExecutorConfig {
+        use crate::model_selector::*;
+
+        let permission_policy = if self.plan.unwrap_or(false) {
+            PermissionPolicy::Plan
+        } else if self.dangerously_skip_permissions.unwrap_or(false) {
+            PermissionPolicy::Auto
+        } else if self.approvals.unwrap_or(false) {
+            PermissionPolicy::Supervised
+        } else {
+            PermissionPolicy::Auto
+        };
+
+        ExecutorConfig {
+            executor: BaseCodingAgent::ClaudeCode,
+            variant: None,
+            model_id: self.model.clone(),
+            agent_id: None,
+            reasoning_id: None,
+            permission_policy: Some(permission_policy),
+        }
+    }
+
     // MCP configuration methods
+
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
         dirs::home_dir().map(|home| home.join(".claude.json"))
     }
@@ -296,34 +558,6 @@ impl StandardCodingAgentExecutor for ClaudeCode {
             };
         }
         AvailabilityInfo::NotFound
-    }
-
-    async fn available_slash_commands(
-        &self,
-        current_dir: &Path,
-    ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
-        let defaults = Self::hardcoded_slash_commands();
-        let this = self.clone();
-        let current_dir = current_dir.to_path_buf();
-
-        let initial = patch::slash_commands(defaults.clone(), true, None);
-
-        let discovery_stream = futures::stream::once(async move {
-            match this.discover_available_slash_commands(&current_dir).await {
-                Ok(commands) => {
-                    let merged = reorder_slash_commands([commands, defaults].concat());
-                    patch::slash_commands(merged, false, None)
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to discover Claude Code slash commands: {}", e);
-                    patch::slash_commands(defaults, false, Some(e.to_string()))
-                }
-            }
-        });
-
-        Ok(Box::pin(
-            futures::stream::once(async move { initial }).chain(discovery_stream),
-        ))
     }
 }
 
@@ -612,6 +846,7 @@ impl ClaudeLogProcessor {
             ClaudeJson::ControlRequest { .. } => None,
             ClaudeJson::ControlResponse { .. } => None,
             ClaudeJson::ControlCancelRequest { .. } => None,
+            ClaudeJson::RateLimitEvent { session_id, .. } => session_id.clone(),
             ClaudeJson::Unknown { .. } => None,
         }
     }
@@ -796,6 +1031,7 @@ impl ClaudeLogProcessor {
             ClaudeToolData::Bash { command, .. } => ActionType::CommandRun {
                 command: command.clone(),
                 result: None,
+                category: CommandCategory::from_command(command),
             },
             ClaudeToolData::Grep { pattern, .. } => ActionType::Search {
                 query: pattern.clone(),
@@ -928,7 +1164,7 @@ impl ClaudeLogProcessor {
                             patches.push(add_system_message(status.clone(), entry_index_provider));
                         }
                     }
-                    Some("compact_boundary") => {}
+                    Some("compact_boundary") | Some("task_started") => {}
                     Some(subtype) => {
                         let entry = NormalizedEntry {
                             timestamp: None,
@@ -1177,6 +1413,7 @@ impl ClaudeLogProcessor {
                                     action_type: ActionType::CommandRun {
                                         command: info.content.clone(),
                                         result,
+                                        category: CommandCategory::from_command(&info.content),
                                     },
                                     status,
                                 },
@@ -1483,7 +1720,8 @@ impl ClaudeLogProcessor {
             }
             ClaudeJson::ControlRequest { .. }
             | ClaudeJson::ControlResponse { .. }
-            | ClaudeJson::ControlCancelRequest { .. } => {}
+            | ClaudeJson::ControlCancelRequest { .. }
+            | ClaudeJson::RateLimitEvent { .. } => {}
         }
         patches
     }
@@ -1791,6 +2029,8 @@ pub enum ClaudeJson {
         slash_commands: Vec<String>,
         #[serde(default)]
         plugins: Vec<ClaudePlugin>,
+        #[serde(default)]
+        agents: Vec<String>,
     },
     Assistant {
         message: ClaudeMessage,
@@ -1862,6 +2102,12 @@ pub enum ClaudeJson {
     },
     ControlCancelRequest {
         request_id: String,
+    },
+    RateLimitEvent {
+        #[serde(default)]
+        session_id: Option<String>,
+        #[serde(default)]
+        rate_limit_info: Option<serde_json::Value>,
     },
     // Catch-all for unknown message types
     #[serde(untagged)]
@@ -2406,6 +2652,7 @@ mod tests {
             plan: None,
             approvals: None,
             model: None,
+            agent: None,
             append_prompt: AppendPrompt::default(),
             dangerously_skip_permissions: None,
             cmd: crate::command::CmdOverrides {

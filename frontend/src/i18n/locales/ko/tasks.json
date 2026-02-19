@@ -384,7 +384,8 @@
       "mobileView": "모바일 보기 (390x844)",
       "responsiveView": "반응형 보기 (크기 조절 가능)",
       "startDevServer": "개발 서버 시작",
-      "submitUrl": "URL 제출"
+      "submitUrl": "URL 제출",
+      "toggleDevTools": "DevTools 전환"
     },
     "loading": {
       "startingServer": "개발 서버 시작 중...",
@@ -757,6 +758,13 @@
       "prNotFound": "풀 리퀘스트를 찾을 수 없습니다",
       "repoNotInProject": "저장소가 어떤 프로젝트에도 없습니다",
       "failedToCreateWorkspace": "워크스페이스 만들기 실패"
+    }
+  },
+  "shareDialog": {
+    "loginRequired": {
+      "title": "Sign in required",
+      "description": "Sign in to access this feature.",
+      "action": "Sign in"
     }
   }
 }

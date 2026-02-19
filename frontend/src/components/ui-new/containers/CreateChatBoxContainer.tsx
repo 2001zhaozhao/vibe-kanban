@@ -5,86 +5,63 @@ import { useCreateMode } from '@/contexts/CreateModeContext';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { useCreateWorkspace } from '@/hooks/useCreateWorkspace';
 import { useCreateAttachments } from '@/hooks/useCreateAttachments';
-import { useMultiRepoBranches } from '@/hooks/useRepoBranches';
-import { getVariantOptions, areProfilesEqual } from '@/utils/executor';
-import { splitMessageToTitleDescription } from '@/utils/string';
-import type { ExecutorProfileId, BaseCodingAgent, Repo } from 'shared/types';
+import { useExecutorConfig } from '@/hooks/useExecutorConfig';
+import { getSortedExecutorVariantKeys } from '@/utils/executor';
+import type { BaseCodingAgent, Repo } from 'shared/types';
 import { CreateChatBox } from '../primitives/CreateChatBox';
 import { SettingsDialog } from '../dialogs/SettingsDialog';
 import { CreateModeRepoPickerBar } from './CreateModeRepoPickerBar';
+import { splitMessageToTitleDescription } from '@/utils/string';
 
 function getRepoDisplayName(repo: Repo) {
   return repo.display_name || repo.name;
 }
 
 interface CreateChatBoxContainerProps {
-  onWorkspaceCreated: ((workspaceId: string) => void) | null;
+  onWorkspaceCreated: (workspaceId: string) => void;
 }
 
 export function CreateChatBoxContainer({
   onWorkspaceCreated,
 }: CreateChatBoxContainerProps) {
   const { t } = useTranslation('common');
-  const { profiles, config, updateAndSaveConfig } = useUserSystem();
+  const { profiles, config } = useUserSystem();
   const {
     repos,
     targetBranches,
-    setTargetBranch,
-    selectedProfile,
-    setSelectedProfile,
     message,
     setMessage,
-    selectedProjectId,
     clearDraft,
     hasInitialValue,
+    hasResolvedInitialRepoDefaults,
     linkedIssue,
     clearLinkedIssue,
+    preferredExecutorConfig,
+    executorConfig: draftConfig,
+    setExecutorConfig: setDraftConfig,
   } = useCreateMode();
 
-  const { createWorkspace } = useCreateWorkspace({
-    onWorkspaceCreated: onWorkspaceCreated ?? undefined,
-  });
+  const { createWorkspace } = useCreateWorkspace();
   const hasSelectedRepos = repos.length > 0;
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
-  const [saveAsDefault, setSaveAsDefault] = useState(false);
   const [hasInitializedStep, setHasInitializedStep] = useState(false);
   const [isSelectingRepos, setIsSelectingRepos] = useState(true);
 
   useEffect(() => {
     if (!hasInitialValue || hasInitializedStep) return;
+    if (!hasSelectedRepos && !hasResolvedInitialRepoDefaults) return;
+
     setIsSelectingRepos(!hasSelectedRepos);
     setHasInitializedStep(true);
-  }, [hasInitialValue, hasInitializedStep, hasSelectedRepos]);
+  }, [
+    hasInitialValue,
+    hasInitializedStep,
+    hasSelectedRepos,
+    hasResolvedInitialRepoDefaults,
+  ]);
 
   const showRepoPickerStep = !hasSelectedRepos || isSelectingRepos;
   const showChatStep = hasSelectedRepos && !isSelectingRepos;
-
-  // Auto-select branch for repos that don't have one yet
-  const repoIds = useMemo(() => repos.map((r) => r.id), [repos]);
-  const { branchesByRepo } = useMultiRepoBranches(repoIds);
-
-  useEffect(() => {
-    repos.forEach((repo) => {
-      if (targetBranches[repo.id]) return;
-      const branches = branchesByRepo[repo.id];
-      if (!branches) return;
-
-      // Priority 1: default_target_branch if configured
-      if (
-        repo.default_target_branch &&
-        branches.some((b) => b.name === repo.default_target_branch)
-      ) {
-        setTargetBranch(repo.id, repo.default_target_branch);
-        return;
-      }
-
-      // Priority 2: current checked-out branch
-      const currentBranch = branches.find((b) => b.is_current);
-      if (currentBranch) {
-        setTargetBranch(repo.id, currentBranch.name);
-      }
-    });
-  }, [repos, branchesByRepo, targetBranches, setTargetBranch]);
 
   // Attachment handling - insert markdown and track image IDs
   const handleInsertMarkdown = useCallback(
@@ -97,7 +74,7 @@ export function CreateChatBoxContainer({
     [message, setMessage]
   );
 
-  const { uploadFiles, getImageIds, clearAttachments, localImages } =
+  const { uploadFiles, clearAttachments, localImages } =
     useCreateAttachments(handleInsertMarkdown);
 
   const onDrop = useCallback(
@@ -120,44 +97,26 @@ export function CreateChatBoxContainer({
     noKeyboard: true,
   });
 
-  // Default to user's config profile or first available executor
-  const effectiveProfile = useMemo<ExecutorProfileId | null>(() => {
-    if (selectedProfile) return selectedProfile;
-    if (config?.executor_profile) return config.executor_profile;
-    if (profiles) {
-      const firstExecutor = Object.keys(profiles)[0] as BaseCodingAgent;
-      if (firstExecutor) {
-        const variants = Object.keys(profiles[firstExecutor]);
-        return {
-          executor: firstExecutor,
-          variant: variants[0] ?? null,
-        };
-      }
-    }
-    return null;
-  }, [selectedProfile, config?.executor_profile, profiles]);
+  const scratchConfig = useMemo(() => {
+    if (!hasInitialValue) return undefined; // still loading
+    return draftConfig ?? null;
+  }, [hasInitialValue, draftConfig]);
 
-  // Get variant options for the current executor
-  const variantOptions = useMemo(
-    () => getVariantOptions(effectiveProfile?.executor, profiles),
-    [effectiveProfile?.executor, profiles]
-  );
-
-  // Detect if user has changed from their saved default
-  const hasChangedFromDefault = useMemo(() => {
-    if (!config?.executor_profile || !effectiveProfile) return false;
-    return !areProfilesEqual(effectiveProfile, config.executor_profile);
-  }, [effectiveProfile, config?.executor_profile]);
-
-  // Reset toggle when profile matches default again
-  useEffect(() => {
-    if (!hasChangedFromDefault) {
-      setSaveAsDefault(false);
-    }
-  }, [hasChangedFromDefault]);
-
-  // Get project ID from context
-  const projectId = selectedProjectId;
+  const {
+    executorConfig,
+    effectiveExecutor,
+    selectedVariant,
+    executorOptions,
+    variantOptions,
+    presetOptions,
+    setOverrides: setExecutorOverrides,
+  } = useExecutorConfig({
+    profiles,
+    lastUsedConfig: preferredExecutorConfig,
+    scratchConfig,
+    configExecutorProfile: config?.executor_profile,
+    onPersist: (cfg) => setDraftConfig(cfg),
+  });
 
   const repoId = repos.length === 1 ? repos[0]?.id : undefined;
   const repoSummaryLabel = useMemo(() => {
@@ -182,40 +141,40 @@ export function CreateChatBoxContainer({
     [repos, targetBranches]
   );
 
+  const hasSelectedBranchesForAllRepos = repos.every(
+    (repo) => !!targetBranches[repo.id]
+  );
+
   // Determine if we can submit
   const canSubmit =
     hasSelectedRepos &&
+    hasSelectedBranchesForAllRepos &&
     message.trim().length > 0 &&
-    effectiveProfile !== null &&
-    projectId !== null;
+    effectiveExecutor !== null;
 
-  // Handle variant change
-  const handleVariantChange = useCallback(
-    (variant: string | null) => {
-      if (!effectiveProfile) return;
-      setSelectedProfile({
-        executor: effectiveProfile.executor,
-        variant,
-      });
-    },
-    [effectiveProfile, setSelectedProfile]
-  );
+  const handlePresetSelect = (presetId: string | null) => {
+    if (!effectiveExecutor) return;
+    setDraftConfig({
+      ...draftConfig,
+      executor: effectiveExecutor,
+      variant: presetId,
+    });
+  };
 
-  // Open settings modal to agent settings section
-  const handleCustomise = useCallback(() => {
+  const handleCustomise = () => {
     SettingsDialog.show({ initialSection: 'agents' });
-  }, []);
+  };
 
   // Handle executor change - use saved variant if switching to default executor
   const handleExecutorChange = useCallback(
     (executor: BaseCodingAgent) => {
-      const executorConfig = profiles?.[executor];
-      if (!executorConfig) {
-        setSelectedProfile({ executor, variant: null });
+      const executorProfile = profiles?.[executor];
+      if (!executorProfile) {
+        setDraftConfig({ executor, variant: null });
         return;
       }
 
-      const variants = Object.keys(executorConfig);
+      const variants = getSortedExecutorVariantKeys(executorProfile);
       let targetVariant: string | null = null;
 
       // If switching to user's default executor, use their saved variant
@@ -236,70 +195,61 @@ export function CreateChatBoxContainer({
           : (variants[0] ?? null);
       }
 
-      setSelectedProfile({ executor, variant: targetVariant });
+      setDraftConfig({ executor, variant: targetVariant });
     },
-    [profiles, setSelectedProfile, config?.executor_profile]
+    [profiles, setDraftConfig, config?.executor_profile]
   );
 
   // Handle submit
   const handleSubmit = useCallback(async () => {
     setHasAttemptedSubmit(true);
-    if (!canSubmit || !effectiveProfile || !projectId) return;
+    if (!canSubmit || !executorConfig) return;
 
-    // Save profile as default if toggle is checked
-    if (saveAsDefault && hasChangedFromDefault) {
-      await updateAndSaveConfig({ executor_profile: effectiveProfile });
-    }
-
-    const { title, description } = splitMessageToTitleDescription(message);
-
-    await createWorkspace.mutateAsync({
-      data: {
-        task: {
-          project_id: projectId,
-          title,
-          description,
-          status: null,
-          parent_workspace_id: null,
-          image_ids: getImageIds(),
-        },
-        executor_profile_id: effectiveProfile,
-        repos: repos.map((r) => ({
-          repo_id: r.id,
-          target_branch: targetBranches[r.id] ?? 'main',
-        })),
-        linked_issue: linkedIssue
-          ? {
-              remote_project_id: linkedIssue.remoteProjectId,
-              issue_id: linkedIssue.issueId,
-            }
-          : null,
-      },
-      linkToIssue: linkedIssue
+    const { title } = splitMessageToTitleDescription(message);
+    const data = {
+      executor_config: executorConfig,
+      name: title,
+      prompt: message,
+      repos: repos.map((r) => ({
+        repo_id: r.id,
+        target_branch: targetBranches[r.id]!,
+      })),
+      linked_issue: linkedIssue
         ? {
-            remoteProjectId: linkedIssue.remoteProjectId,
-            issueId: linkedIssue.issueId,
+            remote_project_id: linkedIssue.remoteProjectId,
+            issue_id: linkedIssue.issueId,
           }
-        : undefined,
+        : null,
+    };
+    const linkToIssue = linkedIssue
+      ? {
+          remoteProjectId: linkedIssue.remoteProjectId,
+          issueId: linkedIssue.issueId,
+        }
+      : undefined;
+
+    const result = await createWorkspace.mutateAsync({
+      data,
+      linkToIssue,
     });
+
+    if (result.workspace) {
+      onWorkspaceCreated(result.workspace.id);
+    }
 
     // Clear attachments and draft after successful creation
     clearAttachments();
     await clearDraft();
   }, [
     canSubmit,
-    effectiveProfile,
-    projectId,
+    executorConfig,
     message,
     repos,
     targetBranches,
     createWorkspace,
-    getImageIds,
+    onWorkspaceCreated,
     clearAttachments,
     clearDraft,
-    saveAsDefault,
-    hasChangedFromDefault,
-    updateAndSaveConfig,
     linkedIssue,
   ]);
 
@@ -307,30 +257,18 @@ export function CreateChatBoxContainer({
   const displayError =
     hasAttemptedSubmit && repos.length === 0
       ? 'Add at least one repository to create a workspace'
-      : createWorkspace.error
-        ? createWorkspace.error instanceof Error
-          ? createWorkspace.error.message
-          : 'Failed to create workspace'
-        : null;
+      : hasAttemptedSubmit && !hasSelectedBranchesForAllRepos
+        ? 'Select a branch for every repository before creating a workspace'
+        : createWorkspace.error
+          ? createWorkspace.error instanceof Error
+            ? createWorkspace.error.message
+            : 'Failed to create workspace'
+          : null;
 
   // Wait for initial value to be applied before rendering
   // This ensures the editor mounts with content ready, so autoFocus works correctly
   if (!hasInitialValue) {
     return null;
-  }
-
-  // Handle case where no project exists
-  if (!projectId) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <div className="text-center max-w-md">
-          <h2 className="text-lg font-medium text-high mb-2">
-            {t('projects.noProjectFound')}
-          </h2>
-          <p className="text-sm text-low">{t('projects.createFirstPrompt')}</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -364,30 +302,23 @@ export function CreateChatBoxContainer({
                   isSending={createWorkspace.isPending}
                   disabled={!hasSelectedRepos}
                   executor={{
-                    selected: effectiveProfile?.executor ?? null,
-                    options: Object.keys(profiles ?? {}) as BaseCodingAgent[],
+                    selected: effectiveExecutor,
+                    options: executorOptions,
                     onChange: handleExecutorChange,
-                  }}
-                  variant={
-                    effectiveProfile
-                      ? {
-                          selected: effectiveProfile.variant ?? 'DEFAULT',
-                          options: variantOptions,
-                          onChange: handleVariantChange,
-                          onCustomise: handleCustomise,
-                        }
-                      : undefined
-                  }
-                  saveAsDefault={{
-                    checked: saveAsDefault,
-                    onChange: setSaveAsDefault,
-                    visible: hasChangedFromDefault,
                   }}
                   error={displayError}
                   repoIds={repos.map((r) => r.id)}
-                  projectId={projectId}
-                  agent={effectiveProfile?.executor ?? null}
+                  agent={effectiveExecutor}
                   repoId={repoId}
+                  modelSelector={{
+                    onAdvancedSettings: handleCustomise,
+                    presets: variantOptions,
+                    selectedPreset: selectedVariant,
+                    onPresetSelect: handlePresetSelect,
+                    onOverrideChange: setExecutorOverrides,
+                    executorConfig,
+                    presetOptions,
+                  }}
                   onPasteFiles={uploadFiles}
                   localImages={localImages}
                   dropzone={{ getRootProps, getInputProps, isDragActive }}

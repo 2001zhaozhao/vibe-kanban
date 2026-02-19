@@ -8,30 +8,19 @@ import {
   ResetProcessRequest,
   EditorType,
   CreatePrApiRequest,
-  CreateTask,
-  CreateAndStartTaskRequest,
-  CreateTaskAttemptBody,
   CreateTag,
   DirectoryListResponse,
   DirectoryEntry,
   ExecutionProcess,
   ExecutionProcessRepoState,
   GitBranch,
-  Project,
   Repo,
   RepoWithTargetBranch,
-  CreateProject,
-  CreateProjectRepo,
   UpdateRepo,
   SearchMode,
   SearchResult,
-  Task,
-  TaskRelationships,
   Tag,
   TagSearchParams,
-  TaskWithAttemptStatus,
-  UpdateProject,
-  UpdateTask,
   UpdateTag,
   UserSystemInfo,
   McpServerQuery,
@@ -48,7 +37,9 @@ import {
   CheckEditorAvailabilityResponse,
   AvailabilityInfo,
   BaseCodingAgent,
-  ExecutorProfileId,
+  ExecutorConfig,
+  DraftFollowUpData,
+  AgentPresetOptionsQuery,
   RunAgentSetupRequest,
   RunAgentSetupResponse,
   GhCliSetupError,
@@ -90,12 +81,18 @@ import {
   OpenPrInfo,
   GitRemote,
   ListPrsError,
+  AttachExistingPrRequest,
+  AttachPrResponse,
   CreateWorkspaceFromPrBody,
   CreateWorkspaceFromPrResponse,
   CreateFromPrError,
   MigrationRequest,
   MigrationResponse,
+  Project,
+  CreateAndStartWorkspaceRequest,
+  CreateAndStartWorkspaceResponse,
 } from 'shared/types';
+import type { Project as RemoteProject } from 'shared/remote-types';
 import type { WorkspaceWithSession } from '@/types/attempt';
 import { createWorkspaceWithSession } from '@/types/attempt';
 
@@ -133,6 +130,10 @@ export type Err<E> = { success: false; error: E | undefined; message?: string };
 
 // Result type for endpoints that need typed errors
 export type Result<T, E> = Ok<T> | Err<E>;
+
+type ListRemoteProjectsResponse = {
+  projects: RemoteProject[];
+};
 
 // Special handler for Result-returning endpoints
 const handleApiResponseAsResult = async <T, E>(
@@ -240,137 +241,6 @@ export const handleApiResponse = async <T, E = T>(
   return result.data as T;
 };
 
-// Project Management APIs
-export const projectsApi = {
-  getAll: async (): Promise<Project[]> => {
-    const response = await makeRequest('/api/projects');
-    return handleApiResponse<Project[]>(response);
-  },
-
-  create: async (data: CreateProject): Promise<Project> => {
-    const response = await makeRequest('/api/projects', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<Project>(response);
-  },
-
-  update: async (id: string, data: UpdateProject): Promise<Project> => {
-    const response = await makeRequest(`/api/projects/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<Project>(response);
-  },
-
-  delete: async (id: string): Promise<void> => {
-    const response = await makeRequest(`/api/projects/${id}`, {
-      method: 'DELETE',
-    });
-    return handleApiResponse<void>(response);
-  },
-
-  openEditor: async (
-    id: string,
-    data: OpenEditorRequest
-  ): Promise<OpenEditorResponse> => {
-    const response = await makeRequest(`/api/projects/${id}/open-editor`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<OpenEditorResponse>(response);
-  },
-
-  searchFiles: async (
-    id: string,
-    query: string,
-    mode?: SearchMode,
-    options?: RequestInit
-  ): Promise<SearchResult[]> => {
-    const modeParam = mode ? `&mode=${encodeURIComponent(mode)}` : '';
-    const response = await makeRequest(
-      `/api/projects/${id}/search?q=${encodeURIComponent(query)}${modeParam}`,
-      options
-    );
-    return handleApiResponse<SearchResult[]>(response);
-  },
-
-  getRepositories: async (projectId: string): Promise<Repo[]> => {
-    const response = await makeRequest(
-      `/api/projects/${projectId}/repositories`
-    );
-    return handleApiResponse<Repo[]>(response);
-  },
-
-  addRepository: async (
-    projectId: string,
-    data: CreateProjectRepo
-  ): Promise<Repo> => {
-    const response = await makeRequest(
-      `/api/projects/${projectId}/repositories`,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }
-    );
-    return handleApiResponse<Repo>(response);
-  },
-
-  deleteRepository: async (
-    projectId: string,
-    repoId: string
-  ): Promise<void> => {
-    const response = await makeRequest(
-      `/api/projects/${projectId}/repositories/${repoId}`,
-      {
-        method: 'DELETE',
-      }
-    );
-    return handleApiResponse<void>(response);
-  },
-};
-
-// Task Management APIs
-export const tasksApi = {
-  getById: async (taskId: string): Promise<Task> => {
-    const response = await makeRequest(`/api/tasks/${taskId}`);
-    return handleApiResponse<Task>(response);
-  },
-
-  create: async (data: CreateTask): Promise<Task> => {
-    const response = await makeRequest(`/api/tasks`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<Task>(response);
-  },
-
-  createAndStart: async (
-    data: CreateAndStartTaskRequest
-  ): Promise<TaskWithAttemptStatus> => {
-    const response = await makeRequest(`/api/tasks/create-and-start`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<TaskWithAttemptStatus>(response);
-  },
-
-  update: async (taskId: string, data: UpdateTask): Promise<Task> => {
-    const response = await makeRequest(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<Task>(response);
-  },
-
-  delete: async (taskId: string): Promise<void> => {
-    const response = await makeRequest(`/api/tasks/${taskId}`, {
-      method: 'DELETE',
-    });
-    return handleApiResponse<void>(response);
-  },
-};
-
 // Sessions API
 export const sessionsApi = {
   getByWorkspace: async (workspaceId: string): Promise<Session[]> => {
@@ -432,11 +302,14 @@ export const sessionsApi = {
 
 // Task Attempts APIs
 export const attemptsApi = {
-  getChildren: async (attemptId: string): Promise<TaskRelationships> => {
-    const response = await makeRequest(
-      `/api/task-attempts/${attemptId}/children`
-    );
-    return handleApiResponse<TaskRelationships>(response);
+  createAndStart: async (
+    data: CreateAndStartWorkspaceRequest
+  ): Promise<CreateAndStartWorkspaceResponse> => {
+    const response = await makeRequest(`/api/task-attempts/create-and-start`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return handleApiResponse<CreateAndStartWorkspaceResponse>(response);
   },
 
   getAll: async (taskId: string): Promise<Workspace[]> => {
@@ -473,14 +346,6 @@ export const attemptsApi = {
       sessionsApi.getByWorkspace(attemptId),
     ]);
     return createWorkspaceWithSession(workspace, sessions[0]);
-  },
-
-  create: async (data: CreateTaskAttemptBody): Promise<Workspace> => {
-    const response = await makeRequest(`/api/task-attempts`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<Workspace>(response);
   },
 
   stop: async (attemptId: string): Promise<void> => {
@@ -697,6 +562,21 @@ export const attemptsApi = {
       body: JSON.stringify(data),
     });
     return handleApiResponseAsResult<string, PrError>(response);
+  },
+
+  /** Try to auto-attach a PR by matching the workspace branch */
+  attachPr: async (
+    attemptId: string,
+    data: AttachExistingPrRequest
+  ): Promise<Result<AttachPrResponse, PrError>> => {
+    const response = await makeRequest(
+      `/api/task-attempts/${attemptId}/pr/attach`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+    return handleApiResponseAsResult<AttachPrResponse, PrError>(response);
   },
 
   startDevServer: async (attemptId: string): Promise<ExecutionProcess[]> => {
@@ -1349,6 +1229,19 @@ export const organizationsApi = {
   },
 };
 
+export const remoteProjectsApi = {
+  listByOrganization: async (
+    organizationId: string
+  ): Promise<RemoteProject[]> => {
+    const response = await makeRequest(
+      `/api/remote/projects?organization_id=${encodeURIComponent(organizationId)}`
+    );
+    const result =
+      await handleApiResponse<ListRemoteProjectsResponse>(response);
+    return result.projects;
+  },
+};
+
 // Scratch API
 export const scratchApi = {
   create: async (
@@ -1393,7 +1286,7 @@ export const scratchApi = {
 
 // Agents API
 export const agentsApi = {
-  getSlashCommandsStreamUrl: (
+  getDiscoveredOptionsStreamUrl: (
     agent: BaseCodingAgent,
     opts?: { workspaceId?: string; repoId?: string }
   ): string => {
@@ -1402,7 +1295,19 @@ export const agentsApi = {
     if (opts?.workspaceId) params.set('workspace_id', opts.workspaceId);
     if (opts?.repoId) params.set('repo_id', opts.repoId);
 
-    return `/api/agents/slash-commands/ws?${params.toString()}`;
+    return `/api/agents/discovered-options/ws?${params.toString()}`;
+  },
+
+  getPresetOptions: async (
+    query: AgentPresetOptionsQuery
+  ): Promise<ExecutorConfig> => {
+    const params = new URLSearchParams();
+    params.set('executor', query.executor);
+    if (query.variant) params.set('variant', query.variant);
+    const response = await makeRequest(
+      `/api/agents/preset-options?${params.toString()}`
+    );
+    return handleApiResponse<ExecutorConfig>(response);
   },
 };
 
@@ -1413,7 +1318,7 @@ export const queueApi = {
    */
   queue: async (
     sessionId: string,
-    data: { message: string; executor_profile_id: ExecutorProfileId }
+    data: DraftFollowUpData
   ): Promise<QueueStatus> => {
     const response = await makeRequest(`/api/sessions/${sessionId}/queue`, {
       method: 'POST',
@@ -1443,6 +1348,11 @@ export const queueApi = {
 
 // Migration API
 export const migrationApi = {
+  listProjects: async (): Promise<Project[]> => {
+    const response = await makeRequest('/api/migration/projects');
+    return handleApiResponse<Project[]>(response);
+  },
+
   start: async (data: MigrationRequest): Promise<MigrationResponse> => {
     const response = await makeRequest('/api/migration/start', {
       method: 'POST',

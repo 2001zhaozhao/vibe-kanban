@@ -135,7 +135,7 @@ services:
       - "${REMOTE_SERVER_PORTS:-127.0.0.1:3000:8081}"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q --no-check-certificate https://127.0.0.1:8081/health 2>/dev/null || wget --spider -q http://127.0.0.1:8081/health"]
+      test: ["CMD-SHELL", "wget --spider -q --no-check-certificate https://127.0.0.1:8081/v1/health 2>/dev/null || wget --spider -q http://127.0.0.1:8081/health"]
       interval: 5s
       timeout: 5s
       retries: 10

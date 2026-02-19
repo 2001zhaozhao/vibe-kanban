@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use workspace_utils::approvals::ApprovalStatus;
@@ -346,28 +348,45 @@ impl<'de> Deserialize<'de> for SdkError {
     }
 }
 
-// Provider API types (for /provider endpoint - model context windows)
-
+/// Configuration response from /config endpoint
 #[derive(Debug, Deserialize)]
-pub(super) struct ProviderListResponse {
-    pub(super) all: Vec<ProviderInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct ProviderInfo {
-    pub(super) id: String,
+pub(super) struct Config {
     #[serde(default)]
-    pub(super) models: std::collections::HashMap<String, ProviderModelInfo>,
+    pub(super) model: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub(super) struct ProviderModelInfo {
+pub struct ProviderModelInfo {
     #[serde(default)]
-    pub(super) limit: ProviderModelLimit,
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub release_date: Option<String>,
+    #[serde(default)]
+    pub variants: Option<HashMap<String, Value>>,
+    #[serde(default)]
+    pub limit: ProviderModelLimit,
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub(super) struct ProviderModelLimit {
+pub struct ProviderModelLimit {
     #[serde(default, deserialize_with = "deserialize_f64_as_u32")]
-    pub(super) context: u32,
+    pub context: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProviderInfo {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub models: HashMap<String, ProviderModelInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProviderListResponse {
+    pub all: Vec<ProviderInfo>,
+    #[serde(default)]
+    pub connected: Vec<String>,
 }

@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { attemptsApi } from '@/lib/api.ts';
 import { useTranslation } from 'react-i18next';
 
-import { TaskWithAttemptStatus, Workspace } from 'shared/types';
+import { Workspace } from 'shared/types';
 import { Loader2 } from 'lucide-react';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { useAuth, useRepoBranches } from '@/hooks';
@@ -33,12 +33,13 @@ import type {
 import type { GhCliSetupError } from 'shared/types';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { defineModal } from '@/lib/modals';
+import { splitMessageToTitleDescription } from '@/utils/string';
 
 interface CreatePRDialogProps {
   attempt: Workspace;
-  task: TaskWithAttemptStatus;
   repoId: string;
   targetBranch?: string;
+  issueIdentifier?: string;
 }
 
 export type CreatePRDialogResult = {
@@ -46,8 +47,17 @@ export type CreatePRDialogResult = {
   error?: string;
 };
 
+const PR_TITLE_SUFFIX = ' (vibe-kanban)';
+
+const appendPrTitleSuffix = (title: string): string => {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) return trimmedTitle;
+  if (trimmedTitle.endsWith(PR_TITLE_SUFFIX)) return trimmedTitle;
+  return `${trimmedTitle}${PR_TITLE_SUFFIX}`;
+};
+
 const CreatePRDialogImpl = NiceModal.create<CreatePRDialogProps>(
-  ({ attempt, task, repoId, targetBranch }) => {
+  ({ attempt, repoId, targetBranch, issueIdentifier }) => {
     const modal = useModal();
     const { t } = useTranslation('tasks');
     const { isLoaded } = useAuth();
@@ -81,11 +91,40 @@ const CreatePRDialogImpl = NiceModal.create<CreatePRDialogProps>(
         return;
       }
 
-      setPrTitle(`${task.title} (vibe-kanban)`);
-      setPrBody(task.description || '');
+      let isCancelled = false;
+
+      const initializePRFields = async () => {
+        try {
+          const firstUserMessage = await attemptsApi.getFirstUserMessage(
+            attempt.id
+          );
+
+          if (isCancelled) return;
+
+          if (firstUserMessage?.trim()) {
+            const { title, description } =
+              splitMessageToTitleDescription(firstUserMessage);
+            setPrTitle(appendPrTitleSuffix(title));
+            setPrBody(description ?? '');
+            return;
+          }
+        } catch {
+          // Fall back to empty fields if prompt loading fails.
+        }
+
+        if (isCancelled) return;
+        setPrTitle('');
+        setPrBody('');
+      };
+
+      initializePRFields();
       setError(null);
       setGhCliHelp(null);
-    }, [modal.visible, isLoaded, task]);
+
+      return () => {
+        isCancelled = true;
+      };
+    }, [attempt.id, modal.visible, isLoaded, issueIdentifier]);
 
     // Set default base branch when branches are loaded
     useEffect(() => {

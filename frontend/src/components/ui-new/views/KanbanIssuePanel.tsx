@@ -160,7 +160,18 @@ export function KanbanIssuePanel({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
+      if (isEditable) {
+        target.blur();
+        (e.currentTarget as HTMLElement).focus();
+        e.stopPropagation();
+      } else {
+        onClose();
+      }
     }
   };
 
@@ -173,8 +184,9 @@ export function KanbanIssuePanel({
 
   return (
     <div
-      className="flex flex-col h-full overflow-hidden"
+      className="flex flex-col h-full overflow-hidden outline-none"
       onKeyDown={handleKeyDown}
+      tabIndex={-1}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-base py-half border-b shrink-0">
@@ -371,11 +383,11 @@ export function KanbanIssuePanel({
           </div>
         )}
 
-        {/* Create Task Button (Create mode only) */}
+        {/* Create Issue Button (Create mode only) */}
         {isCreateMode && (
           <div className="px-base pb-base flex items-center gap-half">
             <PrimaryButton
-              value={t('kanban.createTask')}
+              value={t('kanban.createIssue')}
               onClick={onSubmit}
               disabled={isSubmitting || !formData.title.trim()}
               actionIcon={isSubmitting ? 'spinner' : undefined}

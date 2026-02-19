@@ -25,6 +25,7 @@ pub trait Mailer: Send + Sync {
     async fn send_review_failed(&self, email: &str, pr_name: &str, review_id: &str);
 }
 
+/// No-op mailer used when `LOOPS_EMAIL_API_KEY` is not configured.
 pub struct NoopMailer;
 
 #[async_trait]
@@ -33,33 +34,30 @@ impl Mailer for NoopMailer {
         &self,
         org_name: &str,
         email: &str,
-        accept_url: &str,
+        _accept_url: &str,
         _role: MemberRole,
         _invited_by: Option<&str>,
     ) {
-        tracing::debug!(
+        tracing::warn!(
+            email = %email,
             org_name = %org_name,
-            email = %email,
-            accept_url = %accept_url,
-            "NoopMailer: skipping org invitation email"
+            "Email service not configured — skipping org invitation email. Set LOOPS_EMAIL_API_KEY to enable."
         );
     }
 
-    async fn send_review_ready(&self, email: &str, review_url: &str, pr_name: &str) {
-        tracing::debug!(
+    async fn send_review_ready(&self, email: &str, _review_url: &str, pr_name: &str) {
+        tracing::warn!(
             email = %email,
-            review_url = %review_url,
             pr_name = %pr_name,
-            "NoopMailer: skipping review ready email"
+            "Email service not configured — skipping review ready email. Set LOOPS_EMAIL_API_KEY to enable."
         );
     }
 
-    async fn send_review_failed(&self, email: &str, pr_name: &str, review_id: &str) {
-        tracing::debug!(
+    async fn send_review_failed(&self, email: &str, pr_name: &str, _review_id: &str) {
+        tracing::warn!(
             email = %email,
             pr_name = %pr_name,
-            review_id = %review_id,
-            "NoopMailer: skipping review failed email"
+            "Email service not configured — skipping review failed email. Set LOOPS_EMAIL_API_KEY to enable."
         );
     }
 }

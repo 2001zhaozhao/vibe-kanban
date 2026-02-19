@@ -154,7 +154,8 @@
       "mobileView": "移动视图 (390x844)",
       "responsiveView": "响应式视图（可调整大小）",
       "startDevServer": "启动开发服务器",
-      "submitUrl": "提交 URL"
+      "submitUrl": "提交 URL",
+      "toggleDevTools": "切换 DevTools"
     },
     "loading": {
       "startingServer": "正在启动开发服务器...",
@@ -757,6 +758,13 @@
       "prNotFound": "未找到拉取请求",
       "repoNotInProject": "仓库不在任何项目中",
       "failedToCreateWorkspace": "创建工作区失败"
+    }
+  },
+  "shareDialog": {
+    "loginRequired": {
+      "title": "Sign in required",
+      "description": "Sign in to access this feature.",
+      "action": "Sign in"
     }
   }
 }

@@ -1,15 +1,12 @@
 import { useContext, useMemo, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { createHmrContext } from '@/lib/hmrContext.ts';
-import type { Repo, ExecutorProfileId } from 'shared/types';
+import type { Repo, ExecutorConfig } from 'shared/types';
 import {
   useCreateModeState,
   type CreateModeInitialState,
 } from '@/hooks/useCreateModeState';
 import { useWorkspaces } from '@/components/ui-new/hooks/useWorkspaces';
-import { useTask } from '@/hooks/useTask';
-import { useAttemptRepo } from '@/hooks/useAttemptRepo';
-import { repoApi } from '@/lib/api';
+import { useUserContext } from '@/contexts/remote/UserContext';
 
 interface LinkedIssue {
   issueId: string;
@@ -19,16 +16,14 @@ interface LinkedIssue {
 }
 
 interface CreateModeContextValue {
-  selectedProjectId: string | null;
-  setSelectedProjectId: (id: string | null) => void;
   repos: Repo[];
   addRepo: (repo: Repo) => void;
   removeRepo: (repoId: string) => void;
   clearRepos: () => void;
   targetBranches: Record<string, string | null>;
   setTargetBranch: (repoId: string, branch: string) => void;
-  selectedProfile: ExecutorProfileId | null;
-  setSelectedProfile: (profile: ExecutorProfileId | null) => void;
+  hasResolvedInitialRepoDefaults: boolean;
+  preferredExecutorConfig: ExecutorConfig | null;
   message: string;
   setMessage: (message: string) => void;
   clearDraft: () => Promise<void>;
@@ -38,6 +33,10 @@ interface CreateModeContextValue {
   linkedIssue: LinkedIssue | null;
   /** Clear the linked issue */
   clearLinkedIssue: () => void;
+  /** Persisted executor config (model selector state) */
+  executorConfig: ExecutorConfig | null;
+  /** Update executor config (triggers debounced scratch save) */
+  setExecutorConfig: (config: ExecutorConfig | null) => void;
 }
 
 const CreateModeContext = createHmrContext<CreateModeContextValue | null>(
@@ -56,85 +55,70 @@ export function CreateModeProvider({
   initialState,
   draftId,
 }: CreateModeProviderProps) {
-  // Fetch most recent workspace to use as initial values
-  const { workspaces: activeWorkspaces, archivedWorkspaces } = useWorkspaces();
+  // Fetch most recent workspace to seed project selection only
+  const {
+    workspaces: activeWorkspaces,
+    archivedWorkspaces,
+    isLoading: localWorkspacesLoading,
+  } = useWorkspaces();
+  const { workspaces: remoteWorkspaces, isLoading: remoteWorkspacesLoading } =
+    useUserContext();
   const mostRecentWorkspace = activeWorkspaces[0] ?? archivedWorkspaces[0];
-
-  const { data: lastWorkspaceTask } = useTask(mostRecentWorkspace?.taskId, {
-    enabled: !!mostRecentWorkspace?.taskId,
-  });
-
-  // Primary source: repos from the most recent workspace
-  const { repos: lastWorkspaceRepos, isLoading: workspaceReposLoading } =
-    useAttemptRepo(mostRecentWorkspace?.id, {
-      enabled: !!mostRecentWorkspace?.id,
-    });
-
-  // Fallback: recently-used repos from the server (for new users with no workspaces)
-  const hasWorkspace = !!mostRecentWorkspace;
-  const { data: recentRepos, isLoading: recentReposLoading } = useQuery({
-    queryKey: ['recentReposForCreate'],
-    queryFn: () => repoApi.listRecent(),
-    enabled: !hasWorkspace,
-  });
-
-  const reposLoading = hasWorkspace
-    ? workspaceReposLoading
-    : recentReposLoading;
-
-  const initialRepos = useMemo(() => {
-    // Use last workspace repos if available
-    if (hasWorkspace) return lastWorkspaceRepos;
-    // Fall back to first recent repo for new users
-    if (!recentRepos || recentRepos.length === 0) return [];
-    const repo = recentRepos[0];
-    return [{ ...repo, target_branch: '' }];
-  }, [hasWorkspace, lastWorkspaceRepos, recentRepos]);
+  const localWorkspaceIds = useMemo(
+    () =>
+      new Set([
+        ...activeWorkspaces.map((workspace) => workspace.id),
+        ...archivedWorkspaces.map((workspace) => workspace.id),
+      ]),
+    [activeWorkspaces, archivedWorkspaces]
+  );
 
   const state = useCreateModeState({
-    initialProjectId: lastWorkspaceTask?.project_id,
-    // Pass undefined while loading to prevent premature initialization
-    initialRepos: reposLoading ? undefined : initialRepos,
     initialState,
     draftId,
+    lastWorkspaceId: mostRecentWorkspace?.id ?? null,
+    remoteWorkspaces,
+    localWorkspaceIds,
+    localWorkspacesLoading,
+    remoteWorkspacesLoading,
   });
 
   const value = useMemo<CreateModeContextValue>(
     () => ({
-      selectedProjectId: state.selectedProjectId,
-      setSelectedProjectId: state.setSelectedProjectId,
       repos: state.repos,
       addRepo: state.addRepo,
       removeRepo: state.removeRepo,
       clearRepos: state.clearRepos,
       targetBranches: state.targetBranches,
       setTargetBranch: state.setTargetBranch,
-      selectedProfile: state.selectedProfile,
-      setSelectedProfile: state.setSelectedProfile,
+      hasResolvedInitialRepoDefaults: state.hasResolvedInitialRepoDefaults,
+      preferredExecutorConfig: state.preferredExecutorConfig,
       message: state.message,
       setMessage: state.setMessage,
       clearDraft: state.clearDraft,
       hasInitialValue: state.hasInitialValue,
       linkedIssue: state.linkedIssue,
       clearLinkedIssue: state.clearLinkedIssue,
+      executorConfig: state.executorConfig,
+      setExecutorConfig: state.setExecutorConfig,
     }),
     [
-      state.selectedProjectId,
-      state.setSelectedProjectId,
       state.repos,
       state.addRepo,
       state.removeRepo,
       state.clearRepos,
       state.targetBranches,
       state.setTargetBranch,
-      state.selectedProfile,
-      state.setSelectedProfile,
+      state.hasResolvedInitialRepoDefaults,
+      state.preferredExecutorConfig,
       state.message,
       state.setMessage,
       state.clearDraft,
       state.hasInitialValue,
       state.linkedIssue,
       state.clearLinkedIssue,
+      state.executorConfig,
+      state.setExecutorConfig,
     ]
   );
 

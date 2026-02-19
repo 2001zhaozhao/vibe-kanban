@@ -6,7 +6,6 @@ use db::{
     DBService,
     models::{
         merge::{Merge, MergeStatus, PrMerge},
-        task::{Task, TaskStatus},
         workspace::{Workspace, WorkspaceError},
     },
 };
@@ -14,7 +13,7 @@ use serde_json::json;
 use sqlx::error::Error as SqlxError;
 use thiserror::Error;
 use tokio::time::interval;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::services::{
     analytics::AnalyticsContext,
@@ -32,6 +31,17 @@ enum PrMonitorError {
     WorkspaceError(#[from] WorkspaceError),
     #[error(transparent)]
     Sqlx(#[from] SqlxError),
+}
+
+impl PrMonitorError {
+    fn is_environmental(&self) -> bool {
+        matches!(
+            self,
+            PrMonitorError::GitHostError(
+                GitHostError::CliNotInstalled { .. } | GitHostError::NotAGitRepository(_)
+            )
+        )
+    }
 }
 
 /// Service to monitor PRs and update task status when they are merged
@@ -91,10 +101,17 @@ impl<C: ContainerService + Send + Sync + 'static> PrMonitorService<C> {
 
         for pr_merge in open_prs {
             if let Err(e) = self.check_pr_status(&pr_merge).await {
-                error!(
-                    "Error checking PR #{} for workspace {}: {}",
-                    pr_merge.pr_info.number, pr_merge.workspace_id, e
-                );
+                if e.is_environmental() {
+                    warn!(
+                        "Skipping PR #{} for workspace {} due to environmental error: {}",
+                        pr_merge.pr_info.number, pr_merge.workspace_id, e
+                    );
+                } else {
+                    error!(
+                        "Error checking PR #{} for workspace {}: {}",
+                        pr_merge.pr_info.number, pr_merge.workspace_id, e
+                    );
+                }
             }
         }
         Ok(())
@@ -124,16 +141,15 @@ impl<C: ContainerService + Send + Sync + 'static> PrMonitorService<C> {
             self.sync_pr_to_remote(pr_merge, &pr_status.status, pr_status.merge_commit_sha)
                 .await;
 
-            // If the PR was merged, update the task status to done
+            // If the PR was merged, archive the workspace
             if matches!(&pr_status.status, MergeStatus::Merged)
                 && let Some(workspace) =
                     Workspace::find_by_id(&self.db.pool, pr_merge.workspace_id).await?
             {
                 info!(
-                    "PR #{} was merged, updating task {} to done and archiving workspace",
-                    pr_merge.pr_info.number, workspace.task_id
+                    "PR #{} was merged, archiving workspace {}",
+                    pr_merge.pr_info.number, workspace.id
                 );
-                Task::update_status(&self.db.pool, workspace.task_id, TaskStatus::Done).await?;
                 if !workspace.pinned
                     && let Err(e) = self.container.archive_workspace(workspace.id).await
                 {
@@ -141,16 +157,12 @@ impl<C: ContainerService + Send + Sync + 'static> PrMonitorService<C> {
                 }
 
                 // Track analytics event
-                if let Some(analytics) = &self.analytics
-                    && let Ok(Some(task)) = Task::find_by_id(&self.db.pool, workspace.task_id).await
-                {
+                if let Some(analytics) = &self.analytics {
                     analytics.analytics_service.track_event(
                         &analytics.user_id,
                         "pr_merged",
                         Some(json!({
-                            "task_id": workspace.task_id.to_string(),
                             "workspace_id": workspace.id.to_string(),
-                            "project_id": task.project_id.to_string(),
                         })),
                     );
                 }

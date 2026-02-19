@@ -41,6 +41,7 @@ use crate::{
         utils::{
             ConversationPatch, EntryIndexProvider,
             patch::{add_normalized_entry, replace_normalized_entry, upsert_normalized_entry},
+            shell_command_parsing::{CommandCategory, unwrap_shell_command},
         },
     },
 };
@@ -87,7 +88,7 @@ impl ToNormalizedEntry for CommandState {
             entry_type: NormalizedEntryType::ToolUse {
                 tool_name: "bash".to_string(),
                 action_type: ActionType::CommandRun {
-                    command: self.command.clone(),
+                    command: unwrap_shell_command(&self.command).to_string(),
                     result: Some(CommandRunResult {
                         exit_status: self
                             .exit_code
@@ -98,6 +99,7 @@ impl ToNormalizedEntry for CommandState {
                             build_command_output(Some(&self.stdout), Some(&self.stderr))
                         },
                     }),
+                    category: CommandCategory::from_command(&self.command),
                 },
                 status: self.status.clone(),
             },

@@ -12,9 +12,14 @@ use crate::{
     approvals::ExecutorApprovalService,
     command::{CmdOverrides, CommandBuildError, CommandBuilder, apply_overrides},
     env::ExecutionEnv,
+    executor_discovery::ExecutorDiscoveredOptions,
     executors::{
-        AppendPrompt, AvailabilityInfo, ExecutorError, SpawnedChild, StandardCodingAgentExecutor,
+        AppendPrompt, AvailabilityInfo, BaseCodingAgent, ExecutorError, SpawnedChild,
+        StandardCodingAgentExecutor,
     },
+    logs::utils::patch,
+    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
+    profile::ExecutorConfig,
 };
 
 #[derive(Derivative, Clone, Serialize, Deserialize, TS, JsonSchema)]
@@ -86,6 +91,19 @@ impl StandardCodingAgentExecutor for Copilot {
         self.approvals = Some(approvals);
     }
 
+    fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
+        if let Some(model_id) = &executor_config.model_id {
+            self.model = Some(model_id.clone());
+        }
+
+        if let Some(permission_policy) = &executor_config.permission_policy {
+            self.allow_all_tools = Some(matches!(
+                permission_policy,
+                crate::model_selector::PermissionPolicy::Auto
+            ));
+        }
+    }
+
     async fn spawn(
         &self,
         current_dir: &Path,
@@ -154,5 +172,56 @@ impl StandardCodingAgentExecutor for Copilot {
         } else {
             AvailabilityInfo::NotFound
         }
+    }
+
+    fn get_preset_options(&self) -> ExecutorConfig {
+        ExecutorConfig {
+            executor: BaseCodingAgent::Copilot,
+            variant: None,
+            model_id: self.model.clone(),
+            agent_id: None,
+            reasoning_id: None,
+            permission_policy: Some(crate::model_selector::PermissionPolicy::Auto),
+        }
+    }
+
+    async fn discover_options(
+        &self,
+        _workdir: Option<&std::path::Path>,
+        _repo_path: Option<&std::path::Path>,
+    ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        let options = ExecutorDiscoveredOptions {
+            model_selector: ModelSelectorConfig {
+                models: [
+                    ("gpt-5.2", "GPT-5.2"),
+                    ("gemini-3-pro-preview", "Gemini 3 Pro Preview"),
+                    ("claude-opus-4.5", "Claude Opus 4.5"),
+                    ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
+                    ("claude-haiku-4.5", "Claude Haiku 4.5"),
+                    ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
+                    ("gpt-5.1-codex", "GPT-5.1 Codex"),
+                    ("gpt-5", "GPT-5"),
+                    ("gpt-5.1", "GPT-5.1"),
+                    ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
+                    ("gpt-5-mini", "GPT-5 Mini"),
+                    ("gpt-4.1", "GPT-4.1"),
+                    ("claude-sonnet-4", "Claude Sonnet 4"),
+                ]
+                .into_iter()
+                .map(|(id, name)| ModelInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    provider_id: None,
+                    reasoning_options: vec![],
+                })
+                .collect(),
+                permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        Ok(Box::pin(futures::stream::once(async move {
+            patch::executor_discovered_options(options)
+        })))
     }
 }

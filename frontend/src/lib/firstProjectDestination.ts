@@ -2,6 +2,7 @@ import { PROJECTS_SHAPE, type Project } from 'shared/remote-types';
 import { type OrganizationWithRole } from 'shared/types';
 import { organizationsApi } from '@/lib/api';
 import { createShapeCollection } from '@/lib/electric/collections';
+import { getFirstProjectByOrder } from '@/lib/projectOrder';
 
 const FIRST_PROJECT_LOOKUP_TIMEOUT_MS = 3000;
 
@@ -12,33 +13,7 @@ function getFirstOrganization(
     return null;
   }
 
-  const firstNonPersonal = organizations.find(
-    (organization) => !organization.is_personal
-  );
-  return firstNonPersonal ?? organizations[0];
-}
-
-function getFirstProject(projects: Project[]): Project | null {
-  if (projects.length === 0) {
-    return null;
-  }
-
-  const sortedProjects = [...projects].sort((a, b) => {
-    const aCreatedAt = new Date(a.created_at).getTime();
-    const bCreatedAt = new Date(b.created_at).getTime();
-    if (aCreatedAt !== bCreatedAt) {
-      return aCreatedAt - bCreatedAt;
-    }
-
-    const nameCompare = a.name.localeCompare(b.name);
-    if (nameCompare !== 0) {
-      return nameCompare;
-    }
-
-    return a.id.localeCompare(b.id);
-  });
-
-  return sortedProjects[0];
+  return organizations[0];
 }
 
 async function getFirstProjectInOrganization(
@@ -48,8 +23,12 @@ async function getFirstProjectInOrganization(
     organization_id: organizationId,
   });
 
+  const getCollectionProjects = () =>
+    collection.toArray as unknown as Project[];
+
   if (collection.isReady()) {
-    return getFirstProject(collection.toArray as unknown as Project[]);
+    const projects = getCollectionProjects();
+    return getFirstProjectByOrder(projects);
   }
 
   return new Promise<Project | null>((resolve) => {
@@ -78,7 +57,8 @@ async function getFirstProjectInOrganization(
         return;
       }
 
-      settle(getFirstProject(collection.toArray as unknown as Project[]));
+      const projects = getCollectionProjects();
+      settle(getFirstProjectByOrder(projects));
     };
 
     subscription = collection.subscribeChanges(tryResolve, {

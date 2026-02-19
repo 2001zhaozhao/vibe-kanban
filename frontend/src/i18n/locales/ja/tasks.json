@@ -393,7 +393,8 @@
       "mobileView": "モバイル表示 (390x844)",
       "responsiveView": "レスポンシブ表示（リサイズ可能）",
       "startDevServer": "開発サーバーを開始",
-      "submitUrl": "URLを送信"
+      "submitUrl": "URLを送信",
+      "toggleDevTools": "DevTools を切り替え"
     },
     "loading": {
       "startingServer": "開発サーバーを起動中...",
@@ -757,6 +758,13 @@
       "prNotFound": "プルリクエストが見つかりません",
       "repoNotInProject": "リポジトリがどのプロジェクトにも属していません",
       "failedToCreateWorkspace": "ワークスペースの作成に失敗しました"
+    }
+  },
+  "shareDialog": {
+    "loginRequired": {
+      "title": "Sign in required",
+      "description": "Sign in to access this feature.",
+      "action": "Sign in"
     }
   }
 }

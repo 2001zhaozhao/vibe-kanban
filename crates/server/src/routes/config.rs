@@ -49,9 +49,10 @@ pub fn router() -> Router<DeploymentImpl> {
             get(check_editor_availability),
         )
         .route("/agents/check-availability", get(check_agent_availability))
+        .route("/agents/preset-options", get(get_agent_preset_options))
         .route(
-            "/agents/slash-commands/ws",
-            get(stream_agent_slash_commands_ws),
+            "/agents/discovered-options/ws",
+            get(stream_executor_discovered_options_ws),
         )
 }
 
@@ -91,6 +92,8 @@ pub struct UserSystemInfo {
     pub environment: Environment,
     /// Capabilities supported per executor (e.g., { "CLAUDE_CODE": ["SESSION_FORK"] })
     pub capabilities: HashMap<String, Vec<BaseAgentCapability>>,
+    pub shared_api_base: Option<String>,
+    pub preview_proxy_port: Option<u16>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub single_user_mode: bool,
 }
@@ -124,6 +127,8 @@ async fn get_user_system_info(
             }
             caps
         },
+        shared_api_base: deployment.shared_api_base(),
+        preview_proxy_port: crate::preview_proxy::get_proxy_port(),
         single_user_mode: deployment.single_user_mode(),
     };
 
@@ -195,14 +200,6 @@ async fn track_config_events(deployment: &DeploymentImpl, old: &Config, new: &Co
 
 async fn handle_config_events(deployment: &DeploymentImpl, old: &Config, new: &Config) {
     track_config_events(deployment, old, new).await;
-
-    if !old.disclaimer_acknowledged && new.disclaimer_acknowledged {
-        // Spawn auto project setup as background task to avoid blocking config response
-        let deployment_clone = deployment.clone();
-        tokio::spawn(async move {
-            deployment_clone.trigger_auto_project_setup().await;
-        });
-    }
 }
 
 async fn get_sound(Path(sound): Path<SoundFile>) -> Result<Response, ApiError> {
@@ -475,9 +472,10 @@ async fn check_editor_availability(
     // Construct a minimal EditorConfig for checking
     let editor_config = EditorConfig::new(
         query.editor_type,
-        None, // custom_command
-        None, // remote_ssh_host
-        None, // remote_ssh_user
+        None,  // custom_command
+        None,  // remote_ssh_host
+        None,  // remote_ssh_user
+        false, // auto_install_extension
     );
 
     let available = editor_config.check_availability().await;
@@ -506,8 +504,35 @@ async fn check_agent_availability(
     ResponseJson(ApiResponse::success(info))
 }
 
+#[derive(Debug, Deserialize, TS)]
+pub struct AgentPresetOptionsQuery {
+    pub executor: BaseCodingAgent,
+    pub variant: Option<String>,
+}
+
+async fn get_agent_preset_options(
+    Query(query): Query<AgentPresetOptionsQuery>,
+) -> ResponseJson<ApiResponse<executors::profile::ExecutorConfig>> {
+    let profiles = ExecutorConfigs::get_cached();
+    let profile_id = if let Some(variant) = query.variant {
+        ExecutorProfileId::with_variant(query.executor, variant)
+    } else {
+        ExecutorProfileId::new(query.executor)
+    };
+
+    let options = match profiles.get_coding_agent(&profile_id) {
+        Some(agent) => agent.get_preset_options(),
+        None => {
+            // Return a default config if not found
+            executors::profile::ExecutorConfig::new(query.executor)
+        }
+    };
+
+    ResponseJson(ApiResponse::success(options))
+}
+
 #[derive(Debug, Deserialize)]
-pub struct AgentSlashCommandsStreamQuery {
+pub struct ExecutorDiscoveredOptionsStreamQuery {
     executor: BaseCodingAgent,
     #[serde(default)]
     workspace_id: Option<Uuid>,
@@ -515,22 +540,22 @@ pub struct AgentSlashCommandsStreamQuery {
     repo_id: Option<Uuid>,
 }
 
-pub async fn stream_agent_slash_commands_ws(
+pub async fn stream_executor_discovered_options_ws(
     ws: WebSocketUpgrade,
     State(deployment): State<DeploymentImpl>,
-    Query(query): Query<AgentSlashCommandsStreamQuery>,
+    Query(query): Query<ExecutorDiscoveredOptionsStreamQuery>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| async move {
-        if let Err(e) = handle_agent_slash_commands_ws(socket, deployment, query).await {
-            tracing::warn!("slash commands WS closed: {}", e);
+        if let Err(e) = handle_executor_discovered_options_ws(socket, deployment, query).await {
+            tracing::warn!("discovered options WS closed: {}", e);
         }
     })
 }
 
-async fn handle_agent_slash_commands_ws(
+async fn handle_executor_discovered_options_ws(
     socket: WebSocket,
     deployment: DeploymentImpl,
-    query: AgentSlashCommandsStreamQuery,
+    query: ExecutorDiscoveredOptionsStreamQuery,
 ) -> anyhow::Result<()> {
     use futures_util::{SinkExt, StreamExt};
 
@@ -540,7 +565,7 @@ async fn handle_agent_slash_commands_ws(
 
     match deployment
         .container()
-        .available_agent_slash_commands(
+        .discover_executor_options(
             ExecutorProfileId::new(query.executor),
             query.workspace_id,
             query.repo_id,
@@ -570,7 +595,7 @@ async fn handle_agent_slash_commands_ws(
             let _ = sender.send(LogMsg::Ready.to_ws_message_unchecked()).await;
         }
         Err(e) => {
-            tracing::warn!("Failed to start slash command stream: {}", e);
+            tracing::warn!("Failed to start discovered options stream: {}", e);
         }
     }
 

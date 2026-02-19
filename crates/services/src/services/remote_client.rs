@@ -4,15 +4,20 @@ use std::time::Duration;
 
 use api_types::{
     AcceptInvitationResponse, CreateInvitationRequest, CreateInvitationResponse,
-    CreateIssueRequest, CreateOrganizationRequest, CreateOrganizationResponse,
-    CreateWorkspaceRequest, DeleteResponse, DeleteWorkspaceRequest, GetInvitationResponse,
-    GetOrganizationResponse, HandoffInitRequest, HandoffInitResponse, HandoffRedeemRequest,
-    HandoffRedeemResponse, Issue, ListAttachmentsResponse, ListInvitationsResponse,
-    ListIssuesResponse, ListMembersResponse, ListOrganizationsResponse,
-    ListProjectStatusesResponse, ListProjectsResponse, MutationResponse, Organization,
-    ProfileResponse, RevokeInvitationRequest, SingleUserLoginResponse, TokenRefreshRequest,
-    TokenRefreshResponse, UpdateIssueRequest, UpdateMemberRoleRequest, UpdateMemberRoleResponse,
-    UpdateOrganizationRequest, UpdateWorkspaceRequest, UpsertPullRequestRequest, Workspace,
+    CreateIssueAssigneeRequest, CreateIssueRequest, CreateIssueTagRequest,
+    CreateOrganizationRequest, CreateOrganizationResponse, CreateWorkspaceRequest, DeleteResponse,
+    DeleteWorkspaceRequest, GetInvitationResponse, GetOrganizationResponse, HandoffInitRequest,
+    HandoffInitResponse, HandoffRedeemRequest, HandoffRedeemResponse, Issue, IssueAssignee,
+    IssueTag, ListAttachmentsResponse, ListInvitationsResponse, ListIssueAssigneesResponse,
+    ListIssueTagsResponse, ListIssuesResponse, ListMembersResponse, ListOrganizationsResponse,
+    ListProjectStatusesResponse, ListProjectsResponse, ListPullRequestsResponse, ListTagsResponse,
+    MutationResponse, Organization, ProfileResponse, RevokeInvitationRequest, Tag,
+    TokenRefreshRequest, TokenRefreshResponse, UpdateIssueRequest, UpdateMemberRoleRequest,
+    UpdateMemberRoleResponse, UpdateOrganizationRequest, UpdateWorkspaceRequest,
+    UpsertPullRequestRequest, Workspace,
+
+    // Added in vibe-kanban fork
+    SingleUserLoginResponse
 };
 use backon::{ExponentialBuilder, Retryable};
 use chrono::Duration as ChronoDuration;
@@ -782,6 +787,108 @@ impl RemoteClient {
             .map_err(|e| RemoteClientError::Serde(e.to_string()))
     }
 
+    // ── Issue Assignees ────────────────────────────────────────────────
+
+    /// Lists assignees for an issue.
+    pub async fn list_issue_assignees(
+        &self,
+        issue_id: Uuid,
+    ) -> Result<ListIssueAssigneesResponse, RemoteClientError> {
+        self.get_authed(&format!("/v1/issue_assignees?issue_id={issue_id}"))
+            .await
+    }
+
+    /// Gets a single issue assignee by ID.
+    pub async fn get_issue_assignee(
+        &self,
+        issue_assignee_id: Uuid,
+    ) -> Result<IssueAssignee, RemoteClientError> {
+        self.get_authed(&format!("/v1/issue_assignees/{issue_assignee_id}"))
+            .await
+    }
+
+    /// Creates a new issue assignee.
+    pub async fn create_issue_assignee(
+        &self,
+        request: &CreateIssueAssigneeRequest,
+    ) -> Result<MutationResponse<IssueAssignee>, RemoteClientError> {
+        self.post_authed("/v1/issue_assignees", Some(request)).await
+    }
+
+    /// Deletes an issue assignee.
+    pub async fn delete_issue_assignee(
+        &self,
+        issue_assignee_id: Uuid,
+    ) -> Result<DeleteResponse, RemoteClientError> {
+        let res = self
+            .send(
+                reqwest::Method::DELETE,
+                &format!("/v1/issue_assignees/{issue_assignee_id}"),
+                true,
+                None::<&()>,
+            )
+            .await?;
+        res.json::<DeleteResponse>()
+            .await
+            .map_err(|e| RemoteClientError::Serde(e.to_string()))
+    }
+
+    // ── Tags ───────────────────────────────────────────────────────────
+
+    /// Lists tags for a project.
+    pub async fn list_tags(&self, project_id: Uuid) -> Result<ListTagsResponse, RemoteClientError> {
+        self.get_authed(&format!("/v1/tags?project_id={project_id}"))
+            .await
+    }
+
+    /// Gets a single tag by ID.
+    pub async fn get_tag(&self, tag_id: Uuid) -> Result<Tag, RemoteClientError> {
+        self.get_authed(&format!("/v1/tags/{tag_id}")).await
+    }
+
+    // ── Issue Tags ─────────────────────────────────────────────────────
+
+    /// Lists tags attached to an issue.
+    pub async fn list_issue_tags(
+        &self,
+        issue_id: Uuid,
+    ) -> Result<ListIssueTagsResponse, RemoteClientError> {
+        self.get_authed(&format!("/v1/issue_tags?issue_id={issue_id}"))
+            .await
+    }
+
+    /// Gets a single issue-tag relation by ID.
+    pub async fn get_issue_tag(&self, issue_tag_id: Uuid) -> Result<IssueTag, RemoteClientError> {
+        self.get_authed(&format!("/v1/issue_tags/{issue_tag_id}"))
+            .await
+    }
+
+    /// Attaches a tag to an issue.
+    pub async fn create_issue_tag(
+        &self,
+        request: &CreateIssueTagRequest,
+    ) -> Result<MutationResponse<IssueTag>, RemoteClientError> {
+        self.post_authed("/v1/issue_tags", Some(request)).await
+    }
+
+    /// Removes a tag from an issue.
+    pub async fn delete_issue_tag(
+        &self,
+        issue_tag_id: Uuid,
+    ) -> Result<DeleteResponse, RemoteClientError> {
+        let res = self
+            .send(
+                reqwest::Method::DELETE,
+                &format!("/v1/issue_tags/{issue_tag_id}"),
+                true,
+                None::<&()>,
+            )
+            .await?;
+        res.json::<DeleteResponse>()
+            .await
+            .map_err(|e| RemoteClientError::Serde(e.to_string()))
+    }
+
     // ── Remote Projects ─────────────────────────────────────────────────
 
     /// Gets a single remote project by ID.
@@ -828,6 +935,15 @@ impl RemoteClient {
         )
         .await?;
         Ok(())
+    }
+
+    /// Lists pull requests linked to an issue.
+    pub async fn list_pull_requests(
+        &self,
+        issue_id: Uuid,
+    ) -> Result<ListPullRequestsResponse, RemoteClientError> {
+        self.get_authed(&format!("/v1/pull_requests?issue_id={issue_id}"))
+            .await
     }
 
     /// Lists attachments for an issue on the remote server.

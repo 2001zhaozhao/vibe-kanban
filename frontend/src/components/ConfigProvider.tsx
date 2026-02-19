@@ -8,14 +8,15 @@ import {
   type BaseAgentCapability,
   type LoginStatus,
 } from 'shared/types';
-import type { ExecutorConfig } from 'shared/types';
+import type { ExecutorProfile } from 'shared/types';
 import { configApi } from '../lib/api';
 import { updateLanguageFromConfig } from '../i18n/config';
+import { setRemoteApiBase } from '@/lib/remoteApi';
 
 interface UserSystemState {
   config: Config | null;
   environment: Environment | null;
-  profiles: Record<string, ExecutorConfig> | null;
+  profiles: Record<string, ExecutorProfile> | null;
   capabilities: Record<string, BaseAgentCapability[]> | null;
   analyticsUserId: string | null;
   loginStatus: LoginStatus | null;
@@ -34,13 +35,13 @@ interface UserSystemContextType {
 
   // System data access
   environment: Environment | null;
-  profiles: Record<string, ExecutorConfig> | null;
+  profiles: Record<string, ExecutorProfile> | null;
   capabilities: Record<string, BaseAgentCapability[]> | null;
   analyticsUserId: string | null;
   loginStatus: LoginStatus | null;
   singleUserMode: boolean;
   setEnvironment: (env: Environment | null) => void;
-  setProfiles: (profiles: Record<string, ExecutorConfig> | null) => void;
+  setProfiles: (profiles: Record<string, ExecutorProfile> | null) => void;
   setCapabilities: (caps: Record<string, BaseAgentCapability[]> | null) => void;
 
   // Reload system data
@@ -74,13 +75,17 @@ export function UserSystemProvider({ children }: UserSystemProviderProps) {
   const loginStatus = userSystemInfo?.login_status || null;
   const singleUserMode = userSystemInfo?.single_user_mode || false;
   const profiles =
-    (userSystemInfo?.executors as Record<string, ExecutorConfig> | null) ||
+    (userSystemInfo?.executors as Record<string, ExecutorProfile> | null) ||
     null;
   const capabilities =
     (userSystemInfo?.capabilities as Record<
       string,
       BaseAgentCapability[]
     > | null) || null;
+
+  // Set runtime remote API base URL for self-hosting support.
+  // Must run during render (not in useEffect) so it's set before children mount.
+  setRemoteApiBase(userSystemInfo?.shared_api_base);
 
   // Sync language with i18n when config changes
   useEffect(() => {
@@ -154,7 +159,7 @@ export function UserSystemProvider({ children }: UserSystemProviderProps) {
   );
 
   const setProfiles = useCallback(
-    (newProfiles: Record<string, ExecutorConfig> | null) => {
+    (newProfiles: Record<string, ExecutorProfile> | null) => {
       queryClient.setQueryData<UserSystemInfo>(['user-system'], (old) => {
         if (!old || !newProfiles) return old;
         return {

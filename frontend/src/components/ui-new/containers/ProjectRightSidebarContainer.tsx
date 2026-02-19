@@ -255,7 +255,6 @@ function WorkspaceSessionPanel({
                             mode: 'placeholder' as const,
                           })}
                   sessions={sessions}
-                  projectId={projectId}
                   filesChanged={workspaceSummary?.filesChanged ?? 0}
                   linesAdded={workspaceSummary?.linesAdded ?? 0}
                   linesRemoved={workspaceSummary?.linesRemoved ?? 0}

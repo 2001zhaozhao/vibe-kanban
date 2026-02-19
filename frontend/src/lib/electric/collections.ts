@@ -2,7 +2,7 @@ import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { createCollection } from '@tanstack/react-db';
 
 import { tokenManager } from '../auth/tokenManager';
-import { makeRequest, REMOTE_API_URL } from '@/lib/remoteApi';
+import { makeRequest, getRemoteApiUrl } from '@/lib/remoteApi';
 import type { MutationDefinition, ShapeDefinition } from 'shared/remote-types';
 import type { CollectionConfig, SyncError } from './types';
 
@@ -53,6 +53,30 @@ class ErrorHandler {
   }
 }
 
+const SHAPE_NON_LIVE_TIMEOUT_MS = 5000;
+const SHAPE_LIVE_TIMEOUT_MS = 25000;
+
+function getRequestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  if (typeof Request !== 'undefined' && input instanceof Request) {
+    return input.url;
+  }
+  return String(input);
+}
+
+function getShapeRequestTimeoutMs(input: RequestInfo | URL): number {
+  try {
+    const requestUrl = getRequestUrl(input);
+    const live = new URL(requestUrl, 'http://localhost').searchParams.get(
+      'live'
+    );
+    return live === 'true' ? SHAPE_LIVE_TIMEOUT_MS : SHAPE_NON_LIVE_TIMEOUT_MS;
+  } catch {
+    return SHAPE_NON_LIVE_TIMEOUT_MS;
+  }
+}
+
 /**
  * Create a fetch wrapper that catches network errors and reports them.
  * When isPaused returns true (during token refresh or after logout),
@@ -78,25 +102,54 @@ function createErrorHandlingFetch(
       );
     }
 
+    const timeoutMs = getShapeRequestTimeoutMs(input);
+    const timeoutAbortController = new AbortController();
+    const sourceSignal = init?.signal;
+    const handleSourceAbort = () => {
+      timeoutAbortController.abort(sourceSignal?.reason);
+    };
+    if (sourceSignal) {
+      if (sourceSignal.aborted) {
+        timeoutAbortController.abort(sourceSignal.reason);
+      } else {
+        sourceSignal.addEventListener('abort', handleSourceAbort, {
+          once: true,
+        });
+      }
+    }
+    let didTimeout = false;
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      timeoutAbortController.abort();
+    }, timeoutMs);
+
     try {
-      const response = await fetch(input, init);
+      const response = await fetch(input, {
+        ...init,
+        signal: timeoutAbortController.signal,
+      });
       // Reset error state on successful response
       errorHandler.reset();
       return response;
     } catch (error) {
-      // Don't report abort errors — expected during navigation/unmounting.
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw error;
+      if (didTimeout) {
+        const timeoutError = new Error(
+          `Shape request timed out after ${timeoutMs}ms`
+        );
+        timeoutError.name = 'TimeoutError';
+        onError?.({ message: timeoutError.message });
+        throw timeoutError;
       }
-      // Don't report errors while paused (request was in-flight when
-      // token refresh or logout triggered pause — the abort is expected).
-      if (isPaused?.()) {
-        throw error;
-      }
-      // Pass remaining network errors to onError (debouncing happens there)
+
+      // Always pass network errors to onError (debouncing happens there)
       const message = error instanceof Error ? error.message : 'Network error';
       onError?.({ message });
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      if (sourceSignal) {
+        sourceSignal.removeEventListener('abort', handleSourceAbort);
+      }
     }
   };
 }
@@ -178,7 +231,7 @@ function getAuthenticatedShapeOptions(
   };
 
   return {
-    url: `${REMOTE_API_URL}${url}`,
+    url: `${getRemoteApiUrl()}${url}`,
     params,
     headers: {
       Authorization: async () => {
@@ -260,6 +313,222 @@ function buildCollectionId(
 // ({ txid: number[] }) need to be compatible with electricCollectionOptions.
 type ElectricConfig = Parameters<typeof electricCollectionOptions>[0];
 
+type ShapeSyncError = { status?: number; message?: string; name?: string };
+type ElectricShapeOptions = {
+  onError?: (error: ShapeSyncError) => void;
+  fetchClient?: (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => Promise<Response>;
+  [key: string]: unknown;
+};
+
+type FallbackWrappedOptions = {
+  sync: {
+    sync: (params: {
+      begin: (options?: { immediate?: boolean }) => void;
+      write: (message: unknown) => void;
+      commit: () => void;
+      truncate: () => void;
+      markReady: () => void;
+      [key: string]: unknown;
+    }) => unknown;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+type CoreFallbackDefinition = {
+  table: 'projects' | 'project_statuses' | 'issues';
+  path: '/v1/projects' | '/v1/project_statuses' | '/v1/issues';
+  queryParam: 'organization_id' | 'project_id';
+  responseField: 'projects' | 'project_statuses' | 'issues';
+};
+
+type CoreFallbackSyncBridge = {
+  begin: (options?: { immediate?: boolean }) => void;
+  write: (message: { type: 'insert'; value: ElectricRow }) => void;
+  commit: () => void;
+  truncate: () => void;
+  markReady: () => void;
+};
+
+const CORE_FALLBACK_RETRY_MS = 5000;
+
+const CORE_FALLBACKS: Record<string, CoreFallbackDefinition> = {
+  projects: {
+    table: 'projects',
+    path: '/v1/projects',
+    queryParam: 'organization_id',
+    responseField: 'projects',
+  },
+  project_statuses: {
+    table: 'project_statuses',
+    path: '/v1/project_statuses',
+    queryParam: 'project_id',
+    responseField: 'project_statuses',
+  },
+  issues: {
+    table: 'issues',
+    path: '/v1/issues',
+    queryParam: 'project_id',
+    responseField: 'issues',
+  },
+};
+
+function getCoreFallbackDefinition(
+  table: string,
+  params: Record<string, string>
+): CoreFallbackDefinition | null {
+  const fallback = CORE_FALLBACKS[table];
+  if (!fallback) return null;
+  const queryValue = params[fallback.queryParam];
+  if (!queryValue) return null;
+  return fallback;
+}
+
+function shouldUseCoreFallback(error: ShapeSyncError): boolean {
+  if (error.name === 'AbortError') return false;
+  if (error.status === 401 || error.status === 403) return false;
+  return true;
+}
+
+async function fetchCoreFallbackRows(
+  fallback: CoreFallbackDefinition,
+  params: Record<string, string>
+): Promise<ElectricRow[]> {
+  const queryValue = params[fallback.queryParam];
+  if (!queryValue) return [];
+
+  const query = new URLSearchParams({ [fallback.queryParam]: queryValue });
+  const response = await makeRequest(`${fallback.path}?${query.toString()}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Fallback list failed for ${fallback.table} (${response.status})`
+    );
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  const rows = payload[fallback.responseField];
+  if (!Array.isArray(rows)) {
+    throw new Error(
+      `Fallback list for ${fallback.table} returned unexpected payload`
+    );
+  }
+
+  return rows as ElectricRow[];
+}
+
+function createCoreFallbackController(
+  fallback: CoreFallbackDefinition,
+  params: Record<string, string>,
+  collectionId: string,
+  config?: CollectionConfig
+) {
+  let syncBridge: CoreFallbackSyncBridge | null = null;
+  let hasHydrated = false;
+  let fallbackInFlight: Promise<void> | null = null;
+  let lastAttemptAt = 0;
+
+  const hydrateFromFallback = async () => {
+    if (!syncBridge || hasHydrated) return;
+
+    const rows = await fetchCoreFallbackRows(fallback, params);
+    syncBridge.begin({ immediate: true });
+    syncBridge.truncate();
+    for (const row of rows) {
+      syncBridge.write({ type: 'insert', value: row });
+    }
+    syncBridge.commit();
+    syncBridge.markReady();
+    hasHydrated = true;
+  };
+
+  const triggerFallback = () => {
+    const now = Date.now();
+    if (hasHydrated) return;
+    if (fallbackInFlight) return;
+    if (now - lastAttemptAt < CORE_FALLBACK_RETRY_MS) return;
+
+    lastAttemptAt = now;
+    fallbackInFlight = hydrateFromFallback()
+      .catch((error) => {
+        const message =
+          error instanceof Error ? error.message : 'Fallback request failed';
+        console.error(
+          `[${collectionId}] Electric fallback failed (${fallback.table}):`,
+          error
+        );
+        config?.onError?.({ message });
+      })
+      .finally(() => {
+        fallbackInFlight = null;
+      });
+  };
+
+  const wrapShapeOptions = (shapeOptions: ElectricShapeOptions) => {
+    const options = shapeOptions as ElectricShapeOptions;
+    const baseOnError = options.onError;
+    const baseFetchClient = options.fetchClient;
+
+    return {
+      ...options,
+      fetchClient: baseFetchClient
+        ? async (input: RequestInfo | URL, init?: RequestInit) => {
+            try {
+              const response = await baseFetchClient(input, init);
+              if (
+                !response.ok &&
+                shouldUseCoreFallback({ status: response.status })
+              ) {
+                triggerFallback();
+              }
+              return response;
+            } catch (error) {
+              const shapeError = {
+                name:
+                  error instanceof Error
+                    ? error.name
+                    : error instanceof DOMException
+                      ? error.name
+                      : undefined,
+              };
+              if (shouldUseCoreFallback(shapeError)) {
+                triggerFallback();
+              }
+              throw error;
+            }
+          }
+        : undefined,
+      onError: (error: ShapeSyncError) => {
+        if (shouldUseCoreFallback(error)) {
+          triggerFallback();
+        }
+        baseOnError?.(error);
+      },
+    };
+  };
+
+  const attachSyncWrapper = (collectionOptions: FallbackWrappedOptions) => {
+    const baseSyncFn = collectionOptions.sync.sync;
+    collectionOptions.sync.sync = (syncParams) => {
+      syncBridge = {
+        begin: syncParams.begin,
+        write: (message) => syncParams.write(message),
+        commit: syncParams.commit,
+        truncate: syncParams.truncate,
+        markReady: syncParams.markReady,
+      };
+      return baseSyncFn(syncParams);
+    };
+  };
+
+  return { wrapShapeOptions, attachSyncWrapper };
+}
+
 /**
  * Create an Electric collection for a shape, optionally with mutation support.
  *
@@ -285,18 +554,40 @@ export function createShapeCollection<TRow extends ElectricRow>(
     return cached as typeof cached & { __rowType?: TRow };
   }
 
-  const shapeOptions = getAuthenticatedShapeOptions(shape, params, config);
+  const fallbackDefinition = getCoreFallbackDefinition(shape.table, params);
+  const fallbackController = fallbackDefinition
+    ? createCoreFallbackController(
+        fallbackDefinition,
+        params,
+        collectionId,
+        config
+      )
+    : null;
+
+  const baseShapeOptions = getAuthenticatedShapeOptions(
+    shape,
+    params,
+    config
+  ) as ElectricShapeOptions;
+  const shapeOptions = fallbackController
+    ? fallbackController.wrapShapeOptions(baseShapeOptions)
+    : baseShapeOptions;
   const mutationHandlers = mutation ? buildMutationHandlers(mutation) : {};
 
-  const options = electricCollectionOptions({
+  const electricOptions = electricCollectionOptions({
     id: collectionId,
     shapeOptions: shapeOptions as unknown as ElectricConfig['shapeOptions'],
     getKey: (item: ElectricRow) => getRowKey(item),
     gcTime: DEFAULT_GC_TIME_MS,
     ...mutationHandlers,
   } as unknown as ElectricConfig);
+  if (fallbackController) {
+    fallbackController.attachSyncWrapper(
+      electricOptions as unknown as FallbackWrappedOptions
+    );
+  }
 
-  const collection = createCollection(options) as unknown as ReturnType<
+  const collection = createCollection(electricOptions) as unknown as ReturnType<
     typeof createCollection
   > & { __rowType?: TRow };
 
@@ -348,24 +639,49 @@ function buildMutationHandlers(
     onUpdate: async ({
       transaction,
     }: MutationFnParams): Promise<{ txid: number[] }> => {
-      const results = await Promise.all(
-        transaction.mutations.map(async (m) => {
-          const { key, changes } = m;
-          const response = await makeRequest(`${mutation.url}/${key}`, {
-            method: 'PATCH',
-            body: JSON.stringify(changes),
-          });
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(
-              error.message || `Failed to update ${mutation.name}`
-            );
+      if (transaction.mutations.length > 1) {
+        const updates = transaction.mutations.map((m) => {
+          if (!m.key) {
+            throw new Error(`Failed to update ${mutation.name}: missing key`);
           }
-          const result = (await response.json()) as { txid: number };
-          return result.txid;
-        })
+          return {
+            id: String(m.key),
+            ...(m.changes as Record<string, unknown>),
+          };
+        });
+
+        const response = await makeRequest(`${mutation.url}/bulk`, {
+          method: 'POST',
+          body: JSON.stringify({ updates }),
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(
+            error.message || `Failed to bulk update ${mutation.name}`
+          );
+        }
+        const result = (await response.json()) as { txid: number };
+        return { txid: [result.txid] };
+      }
+
+      const mutationItem = transaction.mutations[0];
+      if (!mutationItem?.key) {
+        throw new Error(`Failed to update ${mutation.name}: missing key`);
+      }
+
+      const response = await makeRequest(
+        `${mutation.url}/${mutationItem.key}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(mutationItem.changes),
+        }
       );
-      return { txid: results };
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `Failed to update ${mutation.name}`);
+      }
+      const result = (await response.json()) as { txid: number };
+      return { txid: [result.txid] };
     },
     onDelete: async ({
       transaction,

@@ -29,6 +29,8 @@ interface DropdownMenuTriggerButtonProps
   extends React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger> {
   icon?: Icon;
   label?: string;
+  showCaret?: boolean;
+  size?: 'default' | 'sm';
 }
 
 export const dropdownMenuTriggerButtonClassName =
@@ -36,30 +38,59 @@ export const dropdownMenuTriggerButtonClassName =
   'focus:outline-none focus-visible:ring-1 focus-visible:ring-brand ' +
   'disabled:opacity-50 disabled:cursor-not-allowed min-w-0';
 
+const sizeClasses = {
+  default: '',
+  sm: 'text-sm h-cta',
+} as const;
+
 const DropdownMenuTriggerButton = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
   DropdownMenuTriggerButtonProps
->(({ className, icon: IconComponent, label, children, ...props }, ref) => (
-  <DropdownMenuPrimitive.Trigger
-    ref={ref}
-    className={cn(dropdownMenuTriggerButtonClassName, className)}
-    {...props}
-  >
-    {IconComponent && (
-      <IconComponent className="size-icon-xs text-normal" weight="bold" />
-    )}
-    {label && (
-      <span className="text-sm text-normal truncate flex-1 text-left">
-        {label}
-      </span>
-    )}
-    {children}
-    <CaretDownIcon
-      className="size-icon-2xs text-normal flex-shrink-0"
-      weight="bold"
-    />
-  </DropdownMenuPrimitive.Trigger>
-));
+>(
+  (
+    {
+      className,
+      icon: IconComponent,
+      label,
+      showCaret = true,
+      size = 'default',
+      children,
+      ...props
+    },
+    ref
+  ) => (
+    <DropdownMenuPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        dropdownMenuTriggerButtonClassName,
+        sizeClasses[size],
+        className
+      )}
+      {...props}
+    >
+      {IconComponent && (
+        <IconComponent className="size-icon-xs text-normal" weight="bold" />
+      )}
+      {label && (
+        <span
+          className={cn(
+            'text-normal truncate flex-1 text-left',
+            size === 'default' && 'text-sm'
+          )}
+        >
+          {label}
+        </span>
+      )}
+      {children}
+      {showCaret && (
+        <CaretDownIcon
+          className="size-icon-2xs text-normal flex-shrink-0"
+          weight="bold"
+        />
+      )}
+    </DropdownMenuPrimitive.Trigger>
+  )
+);
 DropdownMenuTriggerButton.displayName = 'DropdownMenuTriggerButton';
 
 const DropdownMenuSubTrigger = React.forwardRef<

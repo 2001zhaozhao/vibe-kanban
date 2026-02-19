@@ -18,7 +18,8 @@
     "replay": "Rejouer",
     "discard": "Abandonner",
     "addItem": "Ajouter un élément",
-    "reply": "Répondre"
+    "reply": "Répondre",
+    "retry": "Retry"
   },
   "form": {
     "notSpecified": "Non spécifié",
@@ -151,6 +152,7 @@
     "archived": "Archivé",
     "loading": "Chargement...",
     "notFound": "Espace de travail introuvable",
+    "notFoundDescription": "Cet espace de travail a peut-être été supprimé ou le lien est incorrect.",
     "selectToStart": "Sélectionnez un espace de travail pour commencer",
     "draft": "Brouillon",
     "viewArchive": "Voir les archives",
@@ -187,7 +189,8 @@
       "description": "Êtes-vous sûr de vouloir supprimer cet espace de travail ? Cette action est irréversible.",
       "deleteBranchLabel": "Supprimer la branche",
       "cannotDeleteOpenPr": "Impossible de supprimer la branche tant que la PR est ouverte"
-    }
+    },
+    "linkError": "Failed to link workspace"
   },
   "fileTree": {
     "searchPlaceholder": "Rechercher des fichiers...",
@@ -350,7 +353,66 @@
     "title": "Raccourcis Clavier",
     "inWorkspace": "(dans l'espace de travail)",
     "sequentialHint": "Raccourcis séquentiels : Appuyez sur la première touche, puis sur la seconde en 500ms.",
-    "configurableHint": "Configurable dans Paramètres → Général → Saisie de Message"
+    "configurableHint": "Configurable dans Paramètres → Général → Saisie de Message",
+    "groups": {
+      "quickActions": "Actions Rapides",
+      "navigation": "Navigation",
+      "modifiers": "Modificateurs",
+      "goTo": "Aller à (G ...)",
+      "workspace": "Espace de travail (W ...)",
+      "view": "Vue (V ...)",
+      "issues": "Tickets (I ...)",
+      "git": "Git (X ...)",
+      "yank": "Copier (Y ...)",
+      "toggle": "Basculer (T ...)",
+      "run": "Exécuter (R ...)"
+    },
+    "actions": {
+      "showHelp": "Afficher cette aide",
+      "closeCancel": "Fermer/annuler",
+      "createNewTask": "Créer une nouvelle tâche",
+      "deleteSelected": "Supprimer la sélection",
+      "focusSearch": "Aller à la recherche",
+      "moveDown": "Déplacer vers le bas",
+      "moveUp": "Déplacer vers le haut",
+      "moveLeft": "Déplacer vers la gauche",
+      "moveRight": "Déplacer vers la droite",
+      "openCommandBar": "Ouvrir la barre de commandes",
+      "sendMessage": "Envoyer le message",
+      "settings": "Aller aux Paramètres",
+      "new-workspace": "Aller au Nouvel espace de travail",
+      "duplicate-workspace": "Dupliquer l'espace de travail",
+      "rename-workspace": "Renommer l'espace de travail",
+      "pin-workspace": "Épingler/Désépingler l'espace de travail",
+      "archive-workspace": "Archiver l'espace de travail",
+      "delete-workspace": "Supprimer l'espace de travail",
+      "toggle-changes-mode": "Basculer le panneau Modifications",
+      "toggle-logs-mode": "Basculer le panneau Logs",
+      "toggle-preview-mode": "Basculer le panneau Aperçu",
+      "toggle-left-sidebar": "Basculer la barre latérale gauche",
+      "toggle-left-main-panel": "Basculer le panneau Chat",
+      "create-issue": "Créer un ticket",
+      "change-issue-status": "Changer le statut",
+      "change-issue-priority": "Changer la priorité",
+      "change-assignees": "Changer les assignés",
+      "make-sub-issue-of": "Transformer en sous-ticket de",
+      "add-sub-issue": "Ajouter un sous-ticket",
+      "remove-parent-issue": "Retirer le parent",
+      "link-workspace": "Lier un espace de travail",
+      "duplicate-issue": "Dupliquer le ticket",
+      "delete-issue": "Supprimer le ticket",
+      "git-create-pr": "Créer une Pull Request",
+      "git-merge": "Fusionner la branche",
+      "git-rebase": "Rebaser la branche",
+      "git-push": "Pousser les modifications",
+      "copy-path": "Copier le chemin",
+      "copy-raw-logs": "Copier les logs bruts",
+      "toggle-dev-server": "Basculer le serveur de développement",
+      "toggle-wrap-lines": "Basculer le retour à la ligne",
+      "run-setup-script": "Exécuter le script de configuration",
+      "run-cleanup-script": "Exécuter le script de nettoyage",
+      "run-archive-script": "Exécuter le script d'archivage"
+    }
   },
   "typeahead": {
     "tags": "Tags",
@@ -360,6 +422,7 @@
     "selectedRepo": "Dépôt sélectionné : {{repoName}}",
     "missingRepo": "Le dépôt sélectionné n'est plus disponible.",
     "noTagsOrFiles": "Aucun tag ou fichier trouvé",
+    "createTag": "Créer un nouveau tag",
     "noCommands": "Aucune commande disponible pour cet agent."
   },
   "kanban": {
@@ -400,7 +463,7 @@
     "issueDescriptionPlaceholder": "Entrez la description de la tâche...",
     "createDraftWorkspaceImmediately": "Créer immédiatement un espace de travail brouillon",
     "createDraftWorkspaceDescription": "Cochez pour créer automatiquement un espace de travail",
-    "createTask": "Créer la tâche",
+    "createIssue": "Créer la tâche",
     "newIssue": "Nouveau ticket",
     "previewCodeBlock": "[Bloc de code]",
     "previewImage": "[Image]",
@@ -431,6 +494,65 @@
       "title": "Connexion requise",
       "description": "Veuillez vous connecter pour voir ce projet.",
       "action": "Se connecter"
+    },
+    "team": "Team",
+    "personal": "Personal",
+    "searchPlaceholder": "Search issues...",
+    "filters": "Filters",
+    "clearFilters": "Clear filters",
+    "filtersDescription": "Adjust filters and sorting for this board view.",
+    "filterByTag": "Filter by tag",
+    "filterByPriority": "Filter by priority",
+    "tags": "Tags",
+    "sortBy": "Sort",
+    "sortAscending": "Ascending",
+    "sortDescending": "Descending",
+    "assignee": "Assignee",
+    "self": "Me",
+    "priority": "Priority",
+    "subIssuesFilterLabel": "Sub-issues",
+    "workspacesFilterLabel": "Workspaces",
+    "selectAssignees": "Select assignees...",
+    "relationships": "Relationships",
+    "noRelationships": "No relationships",
+    "openProjectsGuide": "Projects guide",
+    "editProjectSettings": "Edit project settings",
+    "linkWorkspace": "Link workspace...",
+    "createNewWorkspace": "Create new workspace",
+    "workspaces": "Workspaces",
+    "showingWorkspaces": "Showing {{count}} of {{total}}",
+    "changeColor": "Change color",
+    "editName": "Edit name",
+    "deleteStatus": "Delete status",
+    "cannotDeleteWithIssues": "Move issues first",
+    "lastVisibleStatus": "At least one status must be visible",
+    "showStatus": "Show status",
+    "hideStatus": "Hide status",
+    "newStatus": "New Status",
+    "visibleColumns": "Visible Columns",
+    "dragToRearrange": "Drag to re-arrange",
+    "addColumn": "Add column",
+    "projectsGuide": {
+      "intro": {
+        "title": "Welcome",
+        "content": "Welcome to Vibe Kanban. Use the help sections in this panel to learn how things work, then create your first issue. You can re-open this help dialog or give feedback anytime from the navbar."
+      },
+      "welcome": {
+        "title": "Projects",
+        "content": "The project page is where you manage issues. You can view your issues as a kanban board, or as a list, and filter by status, tag, assignee and more."
+      },
+      "issues": {
+        "title": "Issues",
+        "content": "Each issue represents a feature or problem to solve. Issues have statuses, priorities, assignees, tags, relationships, comments, sub-issues and more."
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "content": "To start working on an issue, create a workspace. A single issue can have multiple workspaces. Issues describe the work to be done, workspaces are where the work happens."
+      },
+      "organizations": {
+        "title": "Invite your team",
+        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+      }
     }
   },
   "createMode": {
@@ -445,6 +567,19 @@
         "create": "Créer"
       }
     }
+  },
+  "modelSelector": {
+    "preset": "Préréglage",
+    "custom": "Personnaliser",
+    "permissions": "Permissions",
+    "permissionAuto": "Auto",
+    "permissionAsk": "Demander",
+    "permissionPlan": "Plan",
+    "nextTurn": "Prochain tour",
+    "agent": "Agent",
+    "default": "Par défaut",
+    "model": "Modèle",
+    "providers": "Fournisseurs"
   },
   "syncError": {
     "networkErrors": "Erreurs réseau",
@@ -474,5 +609,15 @@
       "description": "Connectez-vous pour organiser vos agents de codage avec des tableaux kanban.",
       "migrateOldProjects": "Migrer les anciens projets"
     }
+  },
+  "errors": {
+    "generic": "An unexpected error occurred"
+  },
+  "personal": "Personal",
+  "changeStatus": {
+    "title": "Change Status",
+    "descriptionSingle": "Change status for \"{{title}}\"",
+    "descriptionMultiple": "Change status for {{count}} issues",
+    "action": "Change Status"
   }
 }

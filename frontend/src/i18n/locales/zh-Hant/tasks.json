@@ -154,7 +154,8 @@
       "mobileView": "行動裝置檢視 (390x844)",
       "responsiveView": "響應式檢視（可調整大小）",
       "startDevServer": "啟動開發伺服器",
-      "submitUrl": "提交 URL"
+      "submitUrl": "提交 URL",
+      "toggleDevTools": "切換 DevTools"
     },
     "loading": {
       "startingServer": "正在啟動開發伺服器...",
@@ -757,6 +758,13 @@
       "prNotFound": "找不到拉取請求",
       "repoNotInProject": "儲存庫不在任何專案中",
       "failedToCreateWorkspace": "建立工作區失敗"
+    }
+  },
+  "shareDialog": {
+    "loginRequired": {
+      "title": "Sign in required",
+      "description": "Sign in to access this feature.",
+      "action": "Sign in"
     }
   }
 }

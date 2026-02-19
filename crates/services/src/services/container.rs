@@ -20,7 +20,6 @@ use db::{
         },
         repo::Repo,
         session::{CreateSession, Session, SessionError},
-        task::{Task, TaskStatus},
         workspace::{Workspace, WorkspaceError},
         workspace_repo::WorkspaceRepo,
     },
@@ -37,7 +36,7 @@ use executors::{
     },
     executors::{ExecutorError, StandardCodingAgentExecutor},
     logs::{NormalizedEntry, NormalizedEntryError, NormalizedEntryType, utils::ConversationPatch},
-    profile::ExecutorProfileId,
+    profile::{ExecutorConfig, ExecutorProfileId},
 };
 use futures::{StreamExt, future, stream::BoxStream};
 use git::{GitService, GitServiceError};
@@ -98,13 +97,13 @@ pub trait ContainerService {
 
     fn workspace_to_current_dir(&self, workspace: &Workspace) -> PathBuf;
 
-    async fn available_agent_slash_commands(
+    async fn discover_executor_options(
         &self,
         executor_profile_id: ExecutorProfileId,
         workspace_id: Option<Uuid>,
         repo_id: Option<Uuid>,
     ) -> Result<Option<BoxStream<'static, Patch>>, ContainerError> {
-        let agent_workdir = if let Some(workspace_id) = workspace_id {
+        let (workdir, repo_path) = if let Some(workspace_id) = workspace_id {
             let workspace = Workspace::find_by_id(&self.db().pool, workspace_id)
                 .await?
                 .ok_or(SqlxError::RowNotFound)?;
@@ -119,34 +118,51 @@ pub trait ContainerService {
             }
 
             let workspace_path = PathBuf::from(container_ref);
-            match workspace.agent_working_dir.as_deref() {
+            let workdir = match workspace.agent_working_dir.as_deref() {
                 Some(dir) if !dir.is_empty() => Some(workspace_path.join(dir)),
                 _ => Some(workspace_path),
-            }
+            };
+
+            let repos = WorkspaceRepo::find_repos_for_workspace(&self.db().pool, workspace_id)
+                .await
+                .unwrap_or_default();
+            let repo_path = if repos.len() == 1 {
+                Some(repos[0].path.clone())
+            } else {
+                None
+            };
+
+            (workdir, repo_path)
         } else if let Some(repo_id) = repo_id {
-            Repo::find_by_id(&self.db().pool, repo_id)
+            let repo = Repo::find_by_id(&self.db().pool, repo_id)
                 .await
                 .ok()
                 .flatten()
-                .map(|repo| repo.path)
+                .map(|repo| repo.path);
+            (None, repo)
         } else {
-            None
-        }
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+            (None, None)
+        };
 
         #[cfg(feature = "qa-mode")]
         {
             let _ = executor_profile_id;
-            let agent = QaMockExecutor;
-            let stream = agent.available_slash_commands(&agent_workdir).await?;
-            return Ok(Some(stream));
+            let _ = workdir;
+            let _ = repo_path;
+            return Ok(None);
         }
         #[cfg(not(feature = "qa-mode"))]
         {
             let executor =
                 ExecutorConfigs::get_cached().get_coding_agent_or_default(&executor_profile_id);
 
-            let stream = executor.available_slash_commands(&agent_workdir).await?;
+            // Spawn background task to refresh global cache for this executor
+            let base_agent = executors::executors::BaseCodingAgent::from(&executor);
+            executors::executors::utils::spawn_global_cache_refresh_for_agent(base_agent);
+
+            let stream = executor
+                .discover_options(workdir.as_deref(), repo_path.as_deref())
+                .await?;
             Ok(Some(stream))
         }
     }
@@ -160,28 +176,6 @@ pub trait ContainerService {
     async fn kill_all_running_processes(&self) -> Result<(), ContainerError>;
 
     async fn delete(&self, workspace: &Workspace) -> Result<(), ContainerError>;
-
-    /// Check if a task has any running execution processes
-    async fn has_running_processes(&self, task_id: Uuid) -> Result<bool, ContainerError> {
-        let workspaces = Workspace::fetch_all(&self.db().pool, Some(task_id)).await?;
-
-        for workspace in workspaces {
-            let sessions = Session::find_by_workspace_id(&self.db().pool, workspace.id).await?;
-            for session in sessions {
-                if let Ok(processes) =
-                    ExecutionProcess::find_by_session_id(&self.db().pool, session.id, false).await
-                {
-                    for process in processes {
-                        if process.status == ExecutionProcessStatus::Running {
-                            return Ok(true);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(false)
-    }
 
     /// A context is finalized when
     /// - Always when the execution process has failed or been killed
@@ -221,28 +215,27 @@ pub trait ContainerService {
         action.next_action.is_none()
     }
 
-    /// Finalize task execution by updating status to InReview and sending notifications
+    /// Finalize workspace execution by sending notifications
     async fn finalize_task(&self, ctx: &ExecutionContext) {
-        if let Err(e) =
-            Task::update_status(&self.db().pool, ctx.task.id, TaskStatus::InReview).await
-        {
-            tracing::error!("Failed to update task status to InReview: {e}");
-        }
-
         // Skip notification if process was intentionally killed by user
         if matches!(ctx.execution_process.status, ExecutionProcessStatus::Killed) {
             return;
         }
 
-        let title = format!("Task Complete: {}", ctx.task.title);
+        let workspace_name = ctx
+            .workspace
+            .name
+            .as_deref()
+            .unwrap_or(&ctx.workspace.branch);
+        let title = format!("Workspace Complete: {}", workspace_name);
         let message = match ctx.execution_process.status {
             ExecutionProcessStatus::Completed => format!(
                 "✅ '{}' completed successfully\nBranch: {:?}\nExecutor: {:?}",
-                ctx.task.title, ctx.workspace.branch, ctx.session.executor
+                workspace_name, ctx.workspace.branch, ctx.session.executor
             ),
             ExecutionProcessStatus::Failed => format!(
                 "❌ '{}' execution failed\nBranch: {:?}\nExecutor: {:?}",
-                ctx.task.title, ctx.workspace.branch, ctx.session.executor
+                workspace_name, ctx.workspace.branch, ctx.session.executor
             ),
             _ => {
                 tracing::warn!(
@@ -307,25 +300,6 @@ pub trait ContainerService {
             }
             // Process marked as failed
             tracing::info!("Marked orphaned execution process {} as failed", process.id);
-            // Update task status to InReview for coding agent and setup script failures
-            if matches!(
-                process.run_reason,
-                ExecutionProcessRunReason::CodingAgent
-                    | ExecutionProcessRunReason::SetupScript
-                    | ExecutionProcessRunReason::CleanupScript
-            ) && let Ok(Some(session)) =
-                Session::find_by_id(&self.db().pool, process.session_id).await
-                && let Ok(Some(workspace)) =
-                    Workspace::find_by_id(&self.db().pool, session.workspace_id).await
-                && let Ok(Some(task)) = workspace.parent_task(&self.db().pool).await
-                && let Err(e) =
-                    Task::update_status(&self.db().pool, task.id, TaskStatus::InReview).await
-            {
-                tracing::error!(
-                    "Failed to update task status to InReview for orphaned session: {}",
-                    e
-                );
-            }
         }
         Ok(())
     }
@@ -962,7 +936,7 @@ pub trait ContainerService {
                     #[cfg(not(feature = "qa-mode"))]
                     {
                         let executor = ExecutorConfigs::get_cached()
-                            .get_coding_agent_or_default(&request.executor_profile_id);
+                            .get_coding_agent_or_default(&request.executor_config.profile_id());
                         executor.normalize_logs(
                             temp_store.clone(),
                             &request.effective_dir(&current_dir),
@@ -981,7 +955,7 @@ pub trait ContainerService {
                     #[cfg(not(feature = "qa-mode"))]
                     {
                         let executor = ExecutorConfigs::get_cached()
-                            .get_coding_agent_or_default(&request.executor_profile_id);
+                            .get_coding_agent_or_default(&request.executor_config.profile_id());
                         executor.normalize_logs(
                             temp_store.clone(),
                             &request.effective_dir(&current_dir),
@@ -996,7 +970,7 @@ pub trait ContainerService {
                 #[cfg(not(feature = "qa-mode"))]
                 ExecutorActionType::ReviewRequest(request) => {
                     let executor = ExecutorConfigs::get_cached()
-                        .get_coding_agent_or_default(&request.executor_profile_id);
+                        .get_coding_agent_or_default(&request.executor_config.profile_id());
                     executor.normalize_logs(temp_store.clone(), &current_dir);
                 }
                 _ => {
@@ -1112,16 +1086,11 @@ pub trait ContainerService {
     async fn start_workspace(
         &self,
         workspace: &Workspace,
-        executor_profile_id: ExecutorProfileId,
+        executor_config: ExecutorConfig,
+        prompt: String,
     ) -> Result<ExecutionProcess, ContainerError> {
         // Create container
         self.create(workspace).await?;
-
-        // Get parent task
-        let task = workspace
-            .parent_task(&self.db().pool)
-            .await?
-            .ok_or(SqlxError::RowNotFound)?;
 
         let repos = WorkspaceRepo::find_repos_for_workspace(&self.db().pool, workspace.id).await?;
 
@@ -1133,14 +1102,12 @@ pub trait ContainerService {
         let session = Session::create(
             &self.db().pool,
             &CreateSession {
-                executor: Some(executor_profile_id.executor.to_string()),
+                executor: Some(executor_config.executor.to_string()),
             },
             Uuid::new_v4(),
             workspace.id,
         )
         .await?;
-
-        let prompt = task.to_prompt();
 
         let repos_with_setup: Vec<_> = repos.iter().filter(|r| r.setup_script.is_some()).collect();
 
@@ -1157,7 +1124,7 @@ pub trait ContainerService {
         let coding_action = ExecutorAction::new(
             ExecutorActionType::CodingAgentInitialRequest(CodingAgentInitialRequest {
                 prompt,
-                executor_profile_id: executor_profile_id.clone(),
+                executor_config: executor_config.clone(),
                 working_dir,
             }),
             cleanup_action.map(Box::new),
@@ -1208,16 +1175,6 @@ pub trait ContainerService {
         executor_action: &ExecutorAction,
         run_reason: &ExecutionProcessRunReason,
     ) -> Result<ExecutionProcess, ContainerError> {
-        // Update task status to InProgress when starting an execution
-        let task = workspace
-            .parent_task(&self.db().pool)
-            .await?
-            .ok_or(SqlxError::RowNotFound)?;
-        if task.status != TaskStatus::InProgress
-            && run_reason != &ExecutionProcessRunReason::DevServer
-        {
-            Task::update_status(&self.db().pool, task.id, TaskStatus::InProgress).await?;
-        }
         // Create new execution process record
         // Capture current HEAD per repository as the "before" commit for this execution
         let repositories =
@@ -1308,8 +1265,6 @@ pub trait ContainerService {
                     update_error
                 );
             }
-            Task::update_status(&self.db().pool, task.id, TaskStatus::InReview).await?;
-
             // Emit stderr error message
             let log_message = LogMsg::Stderr(format!("Failed to start execution: {start_error}"));
             if let Ok(json_line) = serde_json::to_string(&log_message) {
@@ -1353,15 +1308,15 @@ pub trait ContainerService {
         if let Some(msg_store) = self.get_msg_store_by_id(&execution_process.id).await
             && let Some((executor_profile_id, working_dir)) = match executor_action.typ() {
                 ExecutorActionType::CodingAgentInitialRequest(request) => Some((
-                    &request.executor_profile_id,
+                    request.executor_config.profile_id(),
                     request.effective_dir(&workspace_root),
                 )),
                 ExecutorActionType::CodingAgentFollowUpRequest(request) => Some((
-                    &request.executor_profile_id,
+                    request.executor_config.profile_id(),
                     request.effective_dir(&workspace_root),
                 )),
                 ExecutorActionType::ReviewRequest(request) => Some((
-                    &request.executor_profile_id,
+                    request.executor_config.profile_id(),
                     request.effective_dir(&workspace_root),
                 )),
                 _ => None,
@@ -1375,7 +1330,7 @@ pub trait ContainerService {
             #[cfg(not(feature = "qa-mode"))]
             {
                 if let Some(executor) =
-                    ExecutorConfigs::get_cached().get_coding_agent(executor_profile_id)
+                    ExecutorConfigs::get_cached().get_coding_agent(&executor_profile_id)
                 {
                     executor.normalize_logs(msg_store, &working_dir);
                 } else {

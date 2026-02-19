@@ -1,29 +1,17 @@
 import { type ReactNode } from 'react';
-import { CheckIcon, GearIcon, ImageIcon } from '@phosphor-icons/react';
+import { ImageIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { toPrettyCase } from '@/utils/string';
 import WYSIWYGEditor from '@/components/ui/wysiwyg';
 import type { LocalImageMetadata } from '@/components/ui/wysiwyg/context/task-attempt-context';
 import { useUserSystem } from '@/components/ConfigProvider';
-import type { BaseCodingAgent } from 'shared/types';
-import { Toolbar, ToolbarDropdown } from './Toolbar';
-import {
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from './Dropdown';
+import type { BaseCodingAgent, ExecutorConfig } from 'shared/types';
+import { Toolbar } from './Toolbar';
+import { ModelSelectorContainer } from '../containers/ModelSelectorContainer';
 
 export interface EditorProps {
   value: string;
   onChange: (value: string) => void;
-}
-
-export interface VariantProps {
-  selected: string | null;
-  options: string[];
-  onChange: (variant: string | null) => void;
-  onCustomise?: () => void;
 }
 
 export enum VisualVariant {
@@ -39,6 +27,21 @@ export interface DropzoneProps {
   isDragActive: boolean;
 }
 
+export interface ModelSelectorProps {
+  onAdvancedSettings: () => void;
+  presets: string[];
+  selectedPreset: string | null;
+  onPresetSelect: (presetId: string | null) => void;
+  onOverrideChange: (partial: Partial<ExecutorConfig>) => void;
+  executorConfig: ExecutorConfig | null;
+  presetOptions: ExecutorConfig | null | undefined;
+}
+
+export interface ChatBoxModelSelector extends ModelSelectorProps {
+  agent: BaseCodingAgent;
+  workspaceId?: string;
+}
+
 interface ChatBoxBaseProps {
   // Editor
   editor: EditorProps;
@@ -46,13 +49,9 @@ interface ChatBoxBaseProps {
   onCmdEnter: () => void;
   disabled?: boolean;
   repoIds?: string[];
-  projectId?: string;
   repoId?: string;
   executor?: BaseCodingAgent | null;
   autoFocus?: boolean;
-
-  // Variant selection
-  variant?: VariantProps;
 
   // Error display
   error?: string | null;
@@ -68,6 +67,9 @@ interface ChatBoxBaseProps {
 
   // Footer right content (action buttons)
   footerRight: ReactNode;
+
+  // Model selector (rendered with footer controls)
+  modelSelector?: ChatBoxModelSelector;
 
   // Banner content (queued message indicator, feedback mode indicator)
   banner?: ReactNode;
@@ -101,16 +103,15 @@ export function ChatBoxBase({
   onCmdEnter,
   disabled,
   repoIds,
-  projectId,
   repoId,
   executor,
   autoFocus,
-  variant,
   error,
   headerRight,
   headerLeft,
   footerLeft,
   footerRight,
+  modelSelector,
   banner,
   visualVariant,
   onPasteFiles,
@@ -121,10 +122,11 @@ export function ChatBoxBase({
 }: ChatBoxBaseProps) {
   const { t } = useTranslation(['common', 'tasks']);
   const { config } = useUserSystem();
-  const variantLabel = toPrettyCase(variant?.selected || 'DEFAULT');
-  const variantOptions = variant?.options ?? [];
 
   const isDragActive = dropzone?.isDragActive ?? false;
+  const activeModelSelector = modelSelector ?? null;
+  const hasModelSelector = Boolean(activeModelSelector);
+  const hasFooterLeft = Boolean(footerLeft);
 
   return (
     <div
@@ -176,7 +178,7 @@ export function ChatBoxBase({
       )}
 
       {/* Editor area */}
-      <div className="flex flex-col gap-base px-base py-base">
+      <div className="flex flex-col gap-plusfifty px-base py-base rounded-md">
         <WYSIWYGEditor
           key={focusKey}
           placeholder={placeholder}
@@ -189,7 +191,6 @@ export function ChatBoxBase({
           // with the footer when the editor is empty
           className="min-h-double max-h-[50vh] overflow-y-auto"
           repoIds={repoIds}
-          projectId={projectId}
           repoId={repoId}
           executor={executor ?? null}
           autoFocus={autoFocus}
@@ -199,43 +200,27 @@ export function ChatBoxBase({
         />
 
         {/* Footer - Controls */}
-        <div className="flex items-end justify-between">
-          <Toolbar className="flex-1 gap-double">
-            {(visualVariant === VisualVariant.NORMAL ||
-              visualVariant === VisualVariant.EDIT) &&
-              variant &&
-              variantOptions.length > 0 && (
-                <ToolbarDropdown label={variantLabel} disabled={disabled}>
-                  <DropdownMenuLabel>{t('chatBox.variants')}</DropdownMenuLabel>
-                  {variantOptions.map((variantName) => (
-                    <DropdownMenuItem
-                      key={variantName}
-                      icon={
-                        variant?.selected === variantName
-                          ? CheckIcon
-                          : undefined
-                      }
-                      onClick={() => variant?.onChange(variantName)}
-                    >
-                      {toPrettyCase(variantName)}
-                    </DropdownMenuItem>
-                  ))}
-                  {variant?.onCustomise && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        icon={GearIcon}
-                        onClick={variant.onCustomise}
-                      >
-                        {t('chatBox.customise')}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </ToolbarDropdown>
-              )}
+        <div className="flex items-end justify-between gap-base">
+          <Toolbar className="flex-1 min-w-0 flex-wrap gap-double">
+            {activeModelSelector && (
+              <ModelSelectorContainer
+                agent={activeModelSelector.agent}
+                workspaceId={activeModelSelector.workspaceId}
+                onAdvancedSettings={activeModelSelector.onAdvancedSettings}
+                presets={activeModelSelector.presets}
+                selectedPreset={activeModelSelector.selectedPreset}
+                onPresetSelect={activeModelSelector.onPresetSelect}
+                onOverrideChange={activeModelSelector.onOverrideChange}
+                executorConfig={activeModelSelector.executorConfig}
+                presetOptions={activeModelSelector.presetOptions}
+              />
+            )}
+            {hasFooterLeft && hasModelSelector && (
+              <span className="h-3 w-px bg-border/70" aria-hidden="true" />
+            )}
             {footerLeft}
           </Toolbar>
-          <div className="flex gap-base">{footerRight}</div>
+          <div className="flex shrink-0 gap-base">{footerRight}</div>
         </div>
       </div>
     </div>

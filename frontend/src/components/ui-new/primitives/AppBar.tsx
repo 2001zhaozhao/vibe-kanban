@@ -1,4 +1,10 @@
 import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DropResult,
+} from '@hello-pangea/dnd';
+import {
   LayoutIcon,
   PlusIcon,
   KanbanIcon,
@@ -49,6 +55,8 @@ interface AppBarProps {
   onCreateProject: () => void;
   onWorkspacesClick: () => void;
   onProjectClick: (projectId: string) => void;
+  onProjectsDragEnd: (result: DropResult) => void;
+  isSavingProjectOrder?: boolean;
   isWorkspacesActive: boolean;
   activeProjectId: string | null;
   isSignedIn?: boolean;
@@ -66,6 +74,8 @@ export function AppBar({
   onCreateProject,
   onWorkspacesClick,
   onProjectClick,
+  onProjectsDragEnd,
+  isSavingProjectOrder,
   isWorkspacesActive,
   activeProjectId,
   isSignedIn,
@@ -158,33 +168,69 @@ export function AppBar({
       )}
 
       {/* Middle section: Project buttons */}
-      {projects.map((project) => (
-        <Tooltip key={project.id} content={project.name} side="right">
-          <button
-            type="button"
-            onClick={() => onProjectClick(project.id)}
-            className={cn(
-              'flex items-center justify-center w-10 h-10 rounded-lg',
-              'text-sm font-medium transition-colors cursor-pointer',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand',
-              activeProjectId === project.id
-                ? ''
-                : 'bg-primary text-normal hover:opacity-80'
-            )}
-            style={
-              activeProjectId === project.id
-                ? {
-                    color: `hsl(${project.color})`,
-                    backgroundColor: `hsl(${project.color} / 0.2)`,
-                  }
-                : undefined
-            }
-            aria-label={project.name}
-          >
-            {getProjectInitials(project.name)}
-          </button>
-        </Tooltip>
-      ))}
+      <DragDropContext onDragEnd={onProjectsDragEnd}>
+        <Droppable
+          droppableId="app-bar-projects"
+          direction="vertical"
+          isDropDisabled={isSavingProjectOrder}
+        >
+          {(dropProvided) => (
+            <div
+              ref={dropProvided.innerRef}
+              {...dropProvided.droppableProps}
+              className="flex flex-col items-center -mb-base"
+            >
+              {projects.map((project, index) => (
+                <Draggable
+                  key={project.id}
+                  draggableId={project.id}
+                  index={index}
+                  disableInteractiveElementBlocking
+                  isDragDisabled={isSavingProjectOrder}
+                >
+                  {(dragProvided, snapshot) => (
+                    <div
+                      ref={dragProvided.innerRef}
+                      {...dragProvided.draggableProps}
+                      {...dragProvided.dragHandleProps}
+                      className="mb-base"
+                      style={dragProvided.draggableProps.style}
+                    >
+                      <Tooltip content={project.name} side="right">
+                        <button
+                          type="button"
+                          onClick={() => onProjectClick(project.id)}
+                          className={cn(
+                            'flex items-center justify-center w-10 h-10 rounded-lg',
+                            'text-sm font-medium transition-colors cursor-grab',
+                            'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+                            snapshot.isDragging && 'shadow-lg',
+                            activeProjectId === project.id
+                              ? ''
+                              : 'bg-primary text-normal hover:opacity-80'
+                          )}
+                          style={
+                            activeProjectId === project.id
+                              ? {
+                                  color: `hsl(${project.color})`,
+                                  backgroundColor: `hsl(${project.color} / 0.2)`,
+                                }
+                              : undefined
+                          }
+                          aria-label={project.name}
+                        >
+                          {getProjectInitials(project.name)}
+                        </button>
+                      </Tooltip>
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {dropProvided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
 
       {/* Create project button */}
       {isSignedIn && (

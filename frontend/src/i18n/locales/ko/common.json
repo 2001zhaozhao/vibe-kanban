@@ -40,7 +40,8 @@
     "save": "저장",
     "send": "보내기",
     "addItem": "항목 추가",
-    "reply": "답장"
+    "reply": "답장",
+    "retry": "Retry"
   },
   "form": {
     "notSpecified": "지정되지 않음",
@@ -151,6 +152,7 @@
     "archived": "보관됨",
     "loading": "로딩 중...",
     "notFound": "워크스페이스를 찾을 수 없음",
+    "notFoundDescription": "이 워크스페이스가 삭제되었거나 링크가 올바르지 않을 수 있습니다.",
     "selectToStart": "워크스페이스를 선택하여 시작",
     "draft": "초안",
     "viewArchive": "보관함 보기",
@@ -187,7 +189,8 @@
       "description": "이 워크스페이스를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
       "deleteBranchLabel": "브랜치 삭제",
       "cannotDeleteOpenPr": "PR이 열려 있는 동안에는 브랜치를 삭제할 수 없습니다"
-    }
+    },
+    "linkError": "Failed to link workspace"
   },
   "fileTree": {
     "searchPlaceholder": "파일 검색...",
@@ -350,7 +353,66 @@
     "title": "키보드 단축키",
     "inWorkspace": "(워크스페이스 내)",
     "sequentialHint": "순차 단축키: 첫 번째 키를 누른 후 500ms 이내에 두 번째 키를 누르세요.",
-    "configurableHint": "설정 → 일반 → 메시지 입력에서 설정 가능"
+    "configurableHint": "설정 → 일반 → 메시지 입력에서 설정 가능",
+    "groups": {
+      "quickActions": "빠른 작업",
+      "navigation": "탐색",
+      "modifiers": "수정 키",
+      "goTo": "이동 (G ...)",
+      "workspace": "워크스페이스 (W ...)",
+      "view": "보기 (V ...)",
+      "issues": "이슈 (I ...)",
+      "git": "Git (X ...)",
+      "yank": "복사 (Y ...)",
+      "toggle": "전환 (T ...)",
+      "run": "실행 (R ...)"
+    },
+    "actions": {
+      "showHelp": "도움말 표시",
+      "closeCancel": "닫기/취소",
+      "createNewTask": "새 작업 만들기",
+      "deleteSelected": "선택 항목 삭제",
+      "focusSearch": "검색에 포커스",
+      "moveDown": "아래로 이동",
+      "moveUp": "위로 이동",
+      "moveLeft": "왼쪽으로 이동",
+      "moveRight": "오른쪽으로 이동",
+      "openCommandBar": "명령 바 열기",
+      "sendMessage": "메시지 보내기",
+      "settings": "설정으로 이동",
+      "new-workspace": "새 워크스페이스로 이동",
+      "duplicate-workspace": "워크스페이스 복제",
+      "rename-workspace": "워크스페이스 이름 변경",
+      "pin-workspace": "워크스페이스 고정/해제",
+      "archive-workspace": "워크스페이스 보관",
+      "delete-workspace": "워크스페이스 삭제",
+      "toggle-changes-mode": "변경사항 패널 전환",
+      "toggle-logs-mode": "로그 패널 전환",
+      "toggle-preview-mode": "미리보기 패널 전환",
+      "toggle-left-sidebar": "왼쪽 사이드바 전환",
+      "toggle-left-main-panel": "채팅 패널 전환",
+      "create-issue": "이슈 만들기",
+      "change-issue-status": "상태 변경",
+      "change-issue-priority": "우선순위 변경",
+      "change-assignees": "담당자 변경",
+      "make-sub-issue-of": "하위 이슈로 설정",
+      "add-sub-issue": "하위 이슈 추가",
+      "remove-parent-issue": "상위 이슈 해제",
+      "link-workspace": "워크스페이스 연결",
+      "duplicate-issue": "이슈 복제",
+      "delete-issue": "이슈 삭제",
+      "git-create-pr": "Pull Request 만들기",
+      "git-merge": "브랜치 병합",
+      "git-rebase": "브랜치 리베이스",
+      "git-push": "변경사항 푸시",
+      "copy-path": "경로 복사",
+      "copy-raw-logs": "원본 로그 복사",
+      "toggle-dev-server": "개발 서버 전환",
+      "toggle-wrap-lines": "줄 바꿈 전환",
+      "run-setup-script": "설정 스크립트 실행",
+      "run-cleanup-script": "정리 스크립트 실행",
+      "run-archive-script": "보관 스크립트 실행"
+    }
   },
   "typeahead": {
     "tags": "태그",
@@ -360,6 +422,7 @@
     "selectedRepo": "선택된 저장소: {{repoName}}",
     "missingRepo": "선택한 저장소를 더 이상 사용할 수 없습니다.",
     "noTagsOrFiles": "태그 또는 파일을 찾을 수 없습니다",
+    "createTag": "새 태그 만들기",
     "noCommands": "이 에이전트에 사용 가능한 명령어가 없습니다."
   },
   "kanban": {
@@ -400,7 +463,7 @@
     "issueDescriptionPlaceholder": "작업 설명을 입력하세요...",
     "createDraftWorkspaceImmediately": "초안 워크스페이스를 즉시 생성",
     "createDraftWorkspaceDescription": "체크하면 워크스페이스를 자동으로 생성합니다",
-    "createTask": "작업 생성",
+    "createIssue": "작업 생성",
     "newIssue": "새 이슈",
     "previewCodeBlock": "[코드 블록]",
     "previewImage": "[이미지]",
@@ -431,6 +494,65 @@
       "title": "로그인 필요",
       "description": "이 프로젝트를 보려면 로그인하세요.",
       "action": "로그인"
+    },
+    "team": "Team",
+    "personal": "Personal",
+    "searchPlaceholder": "Search issues...",
+    "filters": "Filters",
+    "clearFilters": "Clear filters",
+    "filtersDescription": "Adjust filters and sorting for this board view.",
+    "filterByTag": "Filter by tag",
+    "filterByPriority": "Filter by priority",
+    "tags": "Tags",
+    "sortBy": "Sort",
+    "sortAscending": "Ascending",
+    "sortDescending": "Descending",
+    "assignee": "Assignee",
+    "self": "Me",
+    "priority": "Priority",
+    "subIssuesFilterLabel": "Sub-issues",
+    "workspacesFilterLabel": "Workspaces",
+    "selectAssignees": "Select assignees...",
+    "relationships": "Relationships",
+    "noRelationships": "No relationships",
+    "openProjectsGuide": "Projects guide",
+    "editProjectSettings": "Edit project settings",
+    "linkWorkspace": "Link workspace...",
+    "createNewWorkspace": "Create new workspace",
+    "workspaces": "Workspaces",
+    "showingWorkspaces": "Showing {{count}} of {{total}}",
+    "changeColor": "Change color",
+    "editName": "Edit name",
+    "deleteStatus": "Delete status",
+    "cannotDeleteWithIssues": "Move issues first",
+    "lastVisibleStatus": "At least one status must be visible",
+    "showStatus": "Show status",
+    "hideStatus": "Hide status",
+    "newStatus": "New Status",
+    "visibleColumns": "Visible Columns",
+    "dragToRearrange": "Drag to re-arrange",
+    "addColumn": "Add column",
+    "projectsGuide": {
+      "intro": {
+        "title": "Welcome",
+        "content": "Welcome to Vibe Kanban. Use the help sections in this panel to learn how things work, then create your first issue. You can re-open this help dialog or give feedback anytime from the navbar."
+      },
+      "welcome": {
+        "title": "Projects",
+        "content": "The project page is where you manage issues. You can view your issues as a kanban board, or as a list, and filter by status, tag, assignee and more."
+      },
+      "issues": {
+        "title": "Issues",
+        "content": "Each issue represents a feature or problem to solve. Issues have statuses, priorities, assignees, tags, relationships, comments, sub-issues and more."
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "content": "To start working on an issue, create a workspace. A single issue can have multiple workspaces. Issues describe the work to be done, workspaces are where the work happens."
+      },
+      "organizations": {
+        "title": "Invite your team",
+        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+      }
     }
   },
   "createMode": {
@@ -445,6 +567,19 @@
         "create": "생성"
       }
     }
+  },
+  "modelSelector": {
+    "preset": "프리셋",
+    "custom": "사용자 정의",
+    "permissions": "권한",
+    "permissionAuto": "자동",
+    "permissionAsk": "확인",
+    "permissionPlan": "계획",
+    "nextTurn": "다음 턴",
+    "agent": "에이전트",
+    "default": "기본값",
+    "model": "모델",
+    "providers": "제공자"
   },
   "syncError": {
     "networkErrors": "네트워크 오류",
@@ -474,5 +609,15 @@
       "description": "로그인하여 칸반 보드로 코딩 에이전트를 정리하세요.",
       "migrateOldProjects": "이전 프로젝트 마이그레이션"
     }
+  },
+  "errors": {
+    "generic": "An unexpected error occurred"
+  },
+  "personal": "Personal",
+  "changeStatus": {
+    "title": "Change Status",
+    "descriptionSingle": "Change status for \"{{title}}\"",
+    "descriptionMultiple": "Change status for {{count}} issues",
+    "action": "Change Status"
   }
 }

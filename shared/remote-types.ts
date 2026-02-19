@@ -4,7 +4,7 @@
 // Electric row types
 export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
 
-export type Project = { id: string, organization_id: string, name: string, color: string, created_at: string, updated_at: string, };
+export type Project = { id: string, organization_id: string, name: string, color: string, sort_order: number, created_at: string, updated_at: string, };
 
 export type Notification = { id: string, organization_id: string, user_id: string, notification_type: NotificationType, payload: JsonValue, issue_id: string | null, comment_id: string | null, seen: boolean, dismissed_at: string | null, created_at: string, };
 
@@ -59,7 +59,7 @@ export type CreateProjectRequest = {
  */
 id?: string, organization_id: string, name: string, color: string, };
 
-export type UpdateProjectRequest = { name: string | null, color: string | null, };
+export type UpdateProjectRequest = { name: string | null, color: string | null, sort_order: number | null, };
 
 export type CreateNotificationRequest = { 
 /**
@@ -255,18 +255,6 @@ export const PROJECT_PULL_REQUESTS_SHAPE = defineShape<PullRequest>(
   'pull_requests',
   ['project_id'] as const,
   '/v1/shape/project/{project_id}/pull_requests'
-);
-
-export const PROJECT_BLOBS_SHAPE = defineShape<Blob>(
-  'blobs',
-  ['project_id'] as const,
-  '/v1/shape/project/{project_id}/blobs'
-);
-
-export const PROJECT_ATTACHMENTS_SHAPE = defineShape<Attachment>(
-  'attachments',
-  ['project_id'] as const,
-  '/v1/shape/project/{project_id}/attachments'
 );
 
 export const ISSUE_COMMENTS_SHAPE = defineShape<IssueComment>(

@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     future::Future,
     io,
-    path::Path,
     sync::Arc,
     time::Duration,
 };
@@ -21,14 +20,14 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use workspace_utils::approvals::ApprovalStatus;
 
-use super::{slash_commands, types::OpencodeExecutorEvent};
+use super::{
+    slash_commands,
+    types::{OpencodeExecutorEvent, ProviderInfo, ProviderListResponse},
+};
 use crate::{
     approvals::{ExecutorApprovalError, ExecutorApprovalService},
     env::RepoContext,
-    executors::{
-        ExecutorError,
-        opencode::{OpencodeServer, models::maybe_emit_token_usage},
-    },
+    executors::{ExecutorError, opencode::models::maybe_emit_token_usage},
 };
 
 #[derive(Clone)]
@@ -143,26 +142,6 @@ pub struct ConfigProvidersResponse {
     pub default: HashMap<String, String>,
 }
 
-/// Information about a provider.
-#[derive(Debug, Deserialize)]
-pub struct ProviderInfo {
-    pub id: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub name: String,
-    #[serde(default)]
-    pub models: HashMap<String, Value>,
-}
-
-/// Provider list response.
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct ProviderListResponse {
-    pub all: Vec<ProviderInfo>,
-    pub default: HashMap<String, String>,
-    pub connected: Vec<String>,
-}
-
 /// LSP server status.
 #[derive(Debug, Deserialize, Clone)]
 pub struct LspStatus {
@@ -226,20 +205,6 @@ pub async fn run_session(
         .map_err(|err| ExecutorError::Io(io::Error::other(err)))?;
 
     run_session_inner(config, log_writer, client, cancel).await
-}
-
-pub(super) async fn discover_commands(
-    server: &OpencodeServer,
-    directory: &Path,
-) -> Result<Vec<CommandInfo>, ExecutorError> {
-    let directory = directory.to_string_lossy();
-    let client = reqwest::Client::builder()
-        .default_headers(build_default_headers(&directory, &server.server_password))
-        .build()
-        .map_err(|err| ExecutorError::Io(io::Error::other(err)))?;
-
-    wait_for_health(&client, &server.base_url).await?;
-    list_commands(&client, &server.base_url, &directory).await
 }
 
 pub async fn run_slash_command(
@@ -392,6 +357,18 @@ fn build_default_headers(directory: &str, password: &str) -> HeaderMap {
         headers.insert(AUTHORIZATION, value);
     }
     headers
+}
+
+/// Build HTTP client with OpenCode authentication headers.
+/// Uses Basic Auth: "opencode:{password}" base64 encoded.
+pub fn build_authenticated_client(
+    directory: &str,
+    password: &str,
+) -> Result<reqwest::Client, ExecutorError> {
+    reqwest::Client::builder()
+        .default_headers(build_default_headers(directory, password))
+        .build()
+        .map_err(|err| ExecutorError::Io(io::Error::other(err)))
 }
 
 fn append_session_error(session_error: &mut Option<String>, message: String) {

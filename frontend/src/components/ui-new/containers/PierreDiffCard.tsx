@@ -188,7 +188,6 @@ interface PierreDiffCardProps {
   diff: Diff;
   expanded: boolean;
   onToggle: () => void;
-  projectId: string;
   attemptId: string;
   className: string;
 }
@@ -209,7 +208,6 @@ export function PierreDiffCard({
   diff,
   expanded,
   onToggle,
-  projectId,
   attemptId,
   className = '',
 }: PierreDiffCardProps) {
@@ -343,7 +341,6 @@ export function PierreDiffCard({
             widgetKey={metadata.widgetKey}
             onSave={() => {}}
             onCancel={() => {}}
-            projectId={projectId}
           />
         );
       }
@@ -372,14 +369,9 @@ export function PierreDiffCard({
         );
       }
 
-      return (
-        <ReviewCommentRenderer
-          comment={metadata.comment}
-          projectId={projectId}
-        />
-      );
+      return <ReviewCommentRenderer comment={metadata.comment} />;
     },
-    [projectId, filePath, addComment, diff]
+    [filePath, addComment, diff]
   );
 
   // Handle line click to add comment
@@ -434,7 +426,7 @@ export function PierreDiffCard({
               ...(codeLine !== undefined ? { codeLine } : {}),
             });
           }}
-          title={t('comments.addReviewComment')}
+          title={t('common:comments.addReviewComment')}
         >
           <PlusIcon className="size-3.5" weight="bold" />
         </button>

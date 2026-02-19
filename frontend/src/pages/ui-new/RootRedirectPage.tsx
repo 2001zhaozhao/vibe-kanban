@@ -32,7 +32,9 @@ export function RootRedirectPage() {
       const firstProjectDestination =
         await getFirstProjectDestination(setSelectedOrgId);
       if (!cancelled) {
-        setDestination(firstProjectDestination ?? DEFAULT_DESTINATION);
+        const resolvedDestination =
+          firstProjectDestination ?? DEFAULT_DESTINATION;
+        setDestination(resolvedDestination);
       }
     };
 
