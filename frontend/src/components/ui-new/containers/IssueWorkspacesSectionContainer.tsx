@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '@tanstack/react-router';
+import { toWorkspace } from '@/lib/routes/navigation';
 import { useTranslation } from 'react-i18next';
 import { LinkIcon, PlusIcon } from '@phosphor-icons/react';
 import { useProjectContext } from '@/contexts/remote/ProjectContext';
@@ -36,7 +37,7 @@ export function IssueWorkspacesSectionContainer({
 }: IssueWorkspacesSectionContainerProps) {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId } = useParams({ strict: false });
   const { openIssueWorkspace } = useKanbanNavigation();
   const { openWorkspaceCreateFromState } = useProjectWorkspaceCreateDraft();
   const { userId } = useAuth();
@@ -155,8 +156,12 @@ export function IssueWorkspacesSectionContainer({
       issueId,
     });
     if (!draftId) {
-      navigate('/workspaces/create', {
-        state: createState,
+      navigate({
+        to: '/workspaces/create',
+        state: (prev) => ({
+          ...prev,
+          ...createState,
+        }),
       });
     }
   }, [
@@ -195,7 +200,7 @@ export function IssueWorkspacesSectionContainer({
   // Handle right-clicking a workspace card to navigate directly to full workspace view
   const handleWorkspaceRightClick = useCallback(
     (localWorkspaceId: string) => {
-      navigate(`/workspaces/${localWorkspaceId}`);
+      navigate(toWorkspace(localWorkspaceId));
     },
     [navigate]
   );
@@ -246,6 +251,8 @@ export function IssueWorkspacesSectionContainer({
       const result = await DeleteWorkspaceDialog.show({
         workspaceId: localWorkspaceId,
         branchName: localWorkspace.branch,
+        linkedIssueId: issueId,
+        linkedProjectId: projectId,
       });
 
       if (result.action !== 'confirmed') {
@@ -253,10 +260,12 @@ export function IssueWorkspacesSectionContainer({
       }
 
       try {
-        // First unlink from remote
-        await attemptsApi.unlinkFromIssue(localWorkspaceId);
-        // Then delete local workspace
+        // Delete local workspace first
         await attemptsApi.delete(localWorkspaceId, result.deleteBranches);
+        // Unlink from remote after successful deletion
+        if (result.unlinkFromIssue) {
+          await attemptsApi.unlinkFromIssue(localWorkspaceId);
+        }
       } catch (error) {
         ConfirmDialog.show({
           title: t('common:error'),
@@ -269,7 +278,7 @@ export function IssueWorkspacesSectionContainer({
         });
       }
     },
-    [localWorkspacesById, t]
+    [localWorkspacesById, t, issueId, projectId]
   );
 
   // Actions for the section header

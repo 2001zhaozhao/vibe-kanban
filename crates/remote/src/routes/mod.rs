@@ -30,7 +30,7 @@ mod billing {
         Router::new()
     }
 }
-mod electric_proxy;
+pub(crate) mod electric_proxy;
 pub(crate) mod error;
 pub mod attachments;
 mod github_app;

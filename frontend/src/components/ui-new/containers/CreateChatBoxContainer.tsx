@@ -17,6 +17,14 @@ function getRepoDisplayName(repo: Repo) {
   return repo.display_name || repo.name;
 }
 
+const BRANCH_LABEL_MAX_CHARS = 15;
+
+function truncateBranchLabel(branch: string) {
+  return branch.length > BRANCH_LABEL_MAX_CHARS
+    ? `${branch.slice(0, BRANCH_LABEL_MAX_CHARS)}...`
+    : branch;
+}
+
 interface CreateChatBoxContainerProps {
   onWorkspaceCreated: (workspaceId: string) => void;
 }
@@ -39,6 +47,8 @@ export function CreateChatBoxContainer({
     preferredExecutorConfig,
     executorConfig: draftConfig,
     setExecutorConfig: setDraftConfig,
+    images: draftImages,
+    setImages: setDraftImages,
   } = useCreateMode();
 
   const { createWorkspace } = useCreateWorkspace();
@@ -74,8 +84,8 @@ export function CreateChatBoxContainer({
     [message, setMessage]
   );
 
-  const { uploadFiles, clearAttachments, localImages } =
-    useCreateAttachments(handleInsertMarkdown);
+  const { uploadFiles, getImageIds, clearAttachments, localImages } =
+    useCreateAttachments(handleInsertMarkdown, draftImages, setDraftImages);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -123,7 +133,10 @@ export function CreateChatBoxContainer({
     if (repos.length === 1) {
       const repo = repos[0];
       if (!repo) return '0 repositories selected';
-      const branch = targetBranches[repo.id] ?? 'Select branch';
+      const selectedBranch = targetBranches[repo.id];
+      const branch = selectedBranch
+        ? truncateBranchLabel(selectedBranch)
+        : 'Select branch';
       return `${getRepoDisplayName(repo)} · ${branch}`;
     }
 
@@ -220,6 +233,7 @@ export function CreateChatBoxContainer({
             issue_id: linkedIssue.issueId,
           }
         : null,
+      image_ids: getImageIds(),
     };
     const linkToIssue = linkedIssue
       ? {
@@ -248,6 +262,7 @@ export function CreateChatBoxContainer({
     targetBranches,
     createWorkspace,
     onWorkspaceCreated,
+    getImageIds,
     clearAttachments,
     clearDraft,
     linkedIssue,

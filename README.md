@@ -18,6 +18,8 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
     and the Merge & Complete button can still move issue to done.
     If linked issue is already done, the Merge & Complete button will be disabled.
     If the workspace is not linked to any issue in any kanban board, the Merge & Complete button will be hidden.
+  * Clicking the Merge & Complete button will move the issue to the top of the "Done" category.
+    If this category is not found, it will move it to the rightmost category instead.
 * Added Toasts feature
   * Vibe-Kanban dev complained it isn't accessible, but it sure can be helpful so I've added it to this fork.
   * Toasts are shown when Merge (both single-repo and multi-repo shortcut) are successful; when an issue is created;
@@ -30,7 +32,9 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
 * Added the ability to right click a workspace card in the Project / Kanban Board page to directly go to the
   full-screen workspace view. Left click still shows a preview of the workspace just like before.
 * Fixed a bug where agent logs from one workspace appears to show up in another workspace if directly switching between
-  workspace previews in the Kanban pag
+  workspace previews in the Kanban page.
+* When pasting multi-text into the title of a new issue in the kanban board,
+  any additional lines will overflow into the description.
 
 ## TLS Setup Guide
 

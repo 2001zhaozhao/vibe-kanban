@@ -188,7 +188,8 @@
       "title": "删除工作区",
       "description": "确定要删除此工作区吗？此操作无法撤销。",
       "deleteBranchLabel": "删除分支",
-      "cannotDeleteOpenPr": "PR 开启时无法删除分支"
+      "cannotDeleteOpenPr": "PR 开启时无法删除分支",
+      "unlinkFromIssueLabel": "同时取消与议题的关联"
     },
     "linkError": "Failed to link workspace"
   },
@@ -378,6 +379,7 @@
       "moveLeft": "向左移动",
       "moveRight": "向右移动",
       "openCommandBar": "打开命令栏",
+      "formatInlineCode": "Format inline code",
       "sendMessage": "发送消息",
       "settings": "前往设置",
       "new-workspace": "前往新工作区",
@@ -505,6 +507,24 @@
     "filterByPriority": "Filter by priority",
     "tags": "Tags",
     "sortBy": "Sort",
+    "workspaceSidebar": {
+      "sortDialogTitle": "Sort workspaces",
+      "sortDialogDescription": "Choose how workspaces are ordered in the sidebar.",
+      "sortByLabel": "Sort by",
+      "sortOrderLabel": "Sort order",
+      "sortUpdatedAt": "Updated at",
+      "sortCreatedAt": "Created at",
+      "filterDialogTitle": "Filter workspaces",
+      "filterDialogDescription": "Narrow down workspaces by project and PR state.",
+      "projectFilterLabel": "Project",
+      "prFilterLabel": "PR",
+      "prFilterAll": "All",
+      "prFilterHasPr": "Has PR",
+      "prFilterNoPr": "No PR",
+      "noProject": "No project",
+      "sortButtonTitle": "Sort workspaces",
+      "filterButtonTitle": "Filter workspaces"
+    },
     "sortAscending": "Ascending",
     "sortDescending": "Descending",
     "assignee": "Assignee",

@@ -29,6 +29,7 @@ use db::models::{
     image::WorkspaceImage,
     merge::{Merge, MergeStatus, PrMerge, PullRequestInfo},
     repo::{Repo, RepoError},
+    requests::{CreateAndStartWorkspaceRequest, CreateAndStartWorkspaceResponse, UpdateWorkspace},
     session::{CreateSession, Session},
     workspace::{CreateWorkspace, Workspace, WorkspaceError},
     workspace_repo::{CreateWorkspaceRepo, RepoWithTargetBranch, WorkspaceRepo},
@@ -40,7 +41,7 @@ use executors::{
         script::{ScriptContext, ScriptRequest, ScriptRequestLanguage},
     },
     executors::{CodingAgent, ExecutorError},
-    profile::{ExecutorConfig, ExecutorConfigs, ExecutorProfileId},
+    profile::{ExecutorConfigs, ExecutorProfileId},
 };
 use git::{ConflictOp, GitCliError, GitService, GitServiceError};
 use git2::BranchType;
@@ -103,13 +104,6 @@ pub struct DiffStreamQuery {
 pub struct WorkspaceStreamQuery {
     pub archived: Option<bool>,
     pub limit: Option<i64>,
-}
-
-#[derive(Debug, Deserialize, TS)]
-pub struct UpdateWorkspace {
-    pub archived: Option<bool>,
-    pub pinned: Option<bool>,
-    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,12 +180,6 @@ pub async fn update_workspace(
     }
 
     Ok(ResponseJson(ApiResponse::success(updated)))
-}
-
-#[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
-pub struct WorkspaceRepoInput {
-    pub repo_id: Uuid,
-    pub target_branch: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -1830,27 +1818,6 @@ pub async fn unlink_workspace(
 
 // ── Create-and-start (moved from tasks.rs) ──────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize, TS)]
-pub struct LinkedIssueInfo {
-    pub remote_project_id: Uuid,
-    pub issue_id: Uuid,
-}
-
-#[derive(Debug, Serialize, Deserialize, TS)]
-pub struct CreateAndStartWorkspaceRequest {
-    pub name: Option<String>,
-    pub repos: Vec<WorkspaceRepoInput>,
-    pub linked_issue: Option<LinkedIssueInfo>,
-    pub executor_config: ExecutorConfig,
-    pub prompt: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, TS)]
-pub struct CreateAndStartWorkspaceResponse {
-    pub workspace: Workspace,
-    pub execution_process: ExecutionProcess,
-}
-
 struct ImportedImage {
     image_id: Uuid,
 }
@@ -1938,6 +1905,7 @@ pub async fn create_and_start_workspace(
         linked_issue,
         executor_config,
         prompt,
+        image_ids,
     } = payload;
 
     let workspace_prompt = normalize_prompt(&prompt).ok_or_else(|| {
@@ -2003,6 +1971,11 @@ pub async fn create_and_start_workspace(
         })
         .collect();
     WorkspaceRepo::create_many(pool, workspace.id, &workspace_repos).await?;
+
+    // Associate user-uploaded images with the workspace
+    if let Some(ids) = &image_ids {
+        WorkspaceImage::associate_many_dedup(pool, workspace.id, ids).await?;
+    }
 
     // Import images from linked remote issue so they're available in the workspace
     if let Some(linked_issue) = &linked_issue

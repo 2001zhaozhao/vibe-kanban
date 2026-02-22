@@ -32,7 +32,9 @@ export type UpdateTag = { tag_name: string | null, content: string | null, };
 
 export type DraftFollowUpData = { message: string, executor_config: ExecutorConfig, };
 
-export type DraftWorkspaceData = { message: string, repos: Array<DraftWorkspaceRepo>, executor_config: ExecutorConfig | null, linked_issue: DraftWorkspaceLinkedIssue | null, };
+export type DraftWorkspaceData = { message: string, repos: Array<DraftWorkspaceRepo>, executor_config: ExecutorConfig | null, linked_issue: DraftWorkspaceLinkedIssue | null, images: Array<DraftWorkspaceImage>, };
+
+export type DraftWorkspaceImage = { id: string, file_path: string, original_name: string, mime_type: string | null, size_bytes: bigint, };
 
 export type DraftWorkspaceLinkedIssue = { issue_id: string, simple_id: string, title: string, remote_project_id: string, };
 
@@ -57,6 +59,16 @@ export type PreviewSettingsData = { url: string, screen_size: string | null, res
 export type WorkspaceNotesData = { content: string, };
 
 export type WorkspacePanelStateData = { right_main_panel_mode: string | null, is_left_main_panel_visible: boolean, };
+
+export type WorkspacePrFilterData = "all" | "has_pr" | "no_pr";
+
+export type WorkspaceSortByData = "updated_at" | "created_at";
+
+export type WorkspaceSortOrderData = "asc" | "desc";
+
+export type WorkspaceFilterStateData = { project_ids: Array<string>, pr_filter: WorkspacePrFilterData, };
+
+export type WorkspaceSortStateData = { sort_by: WorkspaceSortByData, sort_order: WorkspaceSortOrderData, };
 
 export type UiPreferencesData = { 
 /**
@@ -98,7 +110,15 @@ is_terminal_visible: boolean | null,
 /**
  * Workspace-specific panel states
  */
-workspace_panel_states: { [key in string]?: WorkspacePanelStateData }, };
+workspace_panel_states: { [key in string]?: WorkspacePanelStateData }, 
+/**
+ * Workspace sidebar filter preferences
+ */
+workspace_filters: WorkspaceFilterStateData, 
+/**
+ * Workspace sidebar sort preferences
+ */
+workspace_sort: WorkspaceSortStateData, };
 
 export type ScratchPayload = { "type": "DRAFT_TASK", "data": string } | { "type": "DRAFT_FOLLOW_UP", "data": DraftFollowUpData } | { "type": "DRAFT_WORKSPACE", "data": DraftWorkspaceData } | { "type": "DRAFT_ISSUE", "data": DraftIssueData } | { "type": "PREVIEW_SETTINGS", "data": PreviewSettingsData } | { "type": "WORKSPACE_NOTES", "data": WorkspaceNotesData } | { "type": "UI_PREFERENCES", "data": UiPreferencesData };
 
@@ -324,7 +344,7 @@ export type GetPrCommentsError = { "type": "no_pr_attached" } | { "type": "cli_n
 
 export type GetPrCommentsQuery = { repo_id: string, };
 
-export type CreateAndStartWorkspaceRequest = { name: string | null, repos: Array<WorkspaceRepoInput>, linked_issue: LinkedIssueInfo | null, executor_config: ExecutorConfig, prompt: string, };
+export type CreateAndStartWorkspaceRequest = { name: string | null, repos: Array<WorkspaceRepoInput>, linked_issue: LinkedIssueInfo | null, executor_config: ExecutorConfig, prompt: string, image_ids: Array<string> | null, };
 
 export type CreateAndStartWorkspaceResponse = { workspace: Workspace, execution_process: ExecutionProcess, };
 

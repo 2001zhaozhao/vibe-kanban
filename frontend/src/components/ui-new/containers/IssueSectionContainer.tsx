@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@tanstack/react-router';
 import { useLinkedIssueContext } from '@/contexts/remote/LinkedIssueContext';
 import { buildIssuePath } from '@/lib/routes/projectSidebarRoutes';
 import { IssueSection } from '../views/IssueSection';

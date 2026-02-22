@@ -21,15 +21,13 @@ use executors::actions::{
     coding_agent_initial::CodingAgentInitialRequest,
 };
 use git::{GitCliError, GitRemote, GitServiceError};
+use git_host::{
+    CreatePrRequest, GitHostError, GitHostProvider, GitHostService, ProviderKind, UnifiedPrComment,
+    github::GhCli,
+};
 use serde::{Deserialize, Serialize};
 use services::services::{
-    config::DEFAULT_PR_DESCRIPTION_PROMPT,
-    container::ContainerService,
-    git_host::{
-        self, CreatePrRequest, GitHostError, GitHostProvider, ProviderKind, UnifiedPrComment,
-        github::GhCli,
-    },
-    remote_sync,
+    config::DEFAULT_PR_DESCRIPTION_PROMPT, container::ContainerService, remote_sync,
     workspace_manager::WorkspaceManager,
 };
 use ts_rs::TS;
@@ -267,7 +265,7 @@ pub async fn create_pr(
         }
     }
 
-    let git_host = match git_host::GitHostService::from_url(&target_remote.url) {
+    let git_host = match GitHostService::from_url(&target_remote.url) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -414,7 +412,7 @@ pub async fn attach_existing_pr(
     let git = deployment.git();
     let remote = git.resolve_remote_for_branch(&repo.path, &workspace_repo.target_branch)?;
 
-    let git_host = match git_host::GitHostService::from_url(&remote.url) {
+    let git_host = match GitHostService::from_url(&remote.url) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -496,11 +494,23 @@ pub async fn attach_existing_pr(
         }
 
         // If PR is merged, archive workspace
-        if matches!(pr_info.status, MergeStatus::Merged)
-            && !workspace.pinned
-            && let Err(e) = deployment.container().archive_workspace(workspace.id).await
-        {
-            tracing::error!("Failed to archive workspace {}: {}", workspace.id, e);
+        if matches!(pr_info.status, MergeStatus::Merged) {
+            let open_pr_count = Merge::count_open_prs_for_workspace(pool, workspace.id).await?;
+
+            if open_pr_count == 0 {
+                if !workspace.pinned
+                    && let Err(e) = deployment.container().archive_workspace(workspace.id).await
+                {
+                    tracing::error!("Failed to archive workspace {}: {}", workspace.id, e);
+                }
+            } else {
+                tracing::info!(
+                    "PR #{} was merged, leaving workspace {} active with {} open PR(s)",
+                    pr_info.number,
+                    workspace.id,
+                    open_pr_count
+                );
+            }
         }
 
         Ok(ResponseJson(ApiResponse::success(AttachPrResponse {
@@ -552,7 +562,7 @@ pub async fn get_pr_comments(
     let git = deployment.git();
     let remote = git.resolve_remote_for_branch(&repo.path, &workspace_repo.target_branch)?;
 
-    let git_host = match git_host::GitHostService::from_url(&remote.url) {
+    let git_host = match GitHostService::from_url(&remote.url) {
         Ok(host) => host,
         Err(GitHostError::CliNotInstalled { provider }) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(

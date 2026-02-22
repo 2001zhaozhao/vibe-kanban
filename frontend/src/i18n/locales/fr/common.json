@@ -188,7 +188,8 @@
       "title": "Supprimer l'espace de travail",
       "description": "Êtes-vous sûr de vouloir supprimer cet espace de travail ? Cette action est irréversible.",
       "deleteBranchLabel": "Supprimer la branche",
-      "cannotDeleteOpenPr": "Impossible de supprimer la branche tant que la PR est ouverte"
+      "cannotDeleteOpenPr": "Impossible de supprimer la branche tant que la PR est ouverte",
+      "unlinkFromIssueLabel": "Également dissocier du ticket"
     },
     "linkError": "Failed to link workspace"
   },
@@ -378,6 +379,7 @@
       "moveLeft": "Déplacer vers la gauche",
       "moveRight": "Déplacer vers la droite",
       "openCommandBar": "Ouvrir la barre de commandes",
+      "formatInlineCode": "Format inline code",
       "sendMessage": "Envoyer le message",
       "settings": "Aller aux Paramètres",
       "new-workspace": "Aller au Nouvel espace de travail",
@@ -505,6 +507,24 @@
     "filterByPriority": "Filter by priority",
     "tags": "Tags",
     "sortBy": "Sort",
+    "workspaceSidebar": {
+      "sortDialogTitle": "Sort workspaces",
+      "sortDialogDescription": "Choose how workspaces are ordered in the sidebar.",
+      "sortByLabel": "Sort by",
+      "sortOrderLabel": "Sort order",
+      "sortUpdatedAt": "Updated at",
+      "sortCreatedAt": "Created at",
+      "filterDialogTitle": "Filter workspaces",
+      "filterDialogDescription": "Narrow down workspaces by project and PR state.",
+      "projectFilterLabel": "Project",
+      "prFilterLabel": "PR",
+      "prFilterAll": "All",
+      "prFilterHasPr": "Has PR",
+      "prFilterNoPr": "No PR",
+      "noProject": "No project",
+      "sortButtonTitle": "Sort workspaces",
+      "filterButtonTitle": "Filter workspaces"
+    },
     "sortAscending": "Ascending",
     "sortDescending": "Descending",
     "assignee": "Assignee",
