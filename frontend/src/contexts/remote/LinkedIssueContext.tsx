@@ -4,6 +4,7 @@ import { useShape, type MutationResult } from '@/lib/electric/hooks';
 import {
   SINGLE_ISSUE_SHAPE,
   PROJECT_PROJECT_STATUSES_SHAPE,
+  PROJECT_ISSUES_SHAPE,
   ISSUE_MUTATION,
   type Issue,
   type ProjectStatus,
@@ -93,8 +94,14 @@ export function LinkedIssueProvider({
     { enabled: statusesEnabled }
   );
 
+  // Sync project issues (read-only) to compute accurate doneTopSortOrder
+  const issuesResult = useShape(PROJECT_ISSUES_SHAPE, statusesParams, {
+    enabled: statusesEnabled,
+  });
+
   const issue = issueResult.data[0] as Issue | undefined;
   const statuses = statusesResult.data;
+  const projectIssues = issuesResult.data as Issue[];
 
   const doneStatus = useMemo(() => {
     if (statuses.length === 0) return undefined;
@@ -113,18 +120,20 @@ export function LinkedIssueProvider({
     issue.status_id === doneStatus.id
   );
 
-  const doneColumnIndex = useMemo(() => {
-    if (!doneStatus) return 1;
-    const visible = statuses
-      .filter((s) => !s.hidden)
-      .sort((a, b) => a.sort_order - b.sort_order);
-    const idx = visible.findIndex((s) => s.id === doneStatus.id);
-    return idx === -1 ? 1 : idx + 1;
-  }, [statuses, doneStatus]);
+  const doneTopSortOrder = useMemo(() => {
+    if (!doneStatus) return -1;
+    const doneIssues = projectIssues.filter(
+      (i) => i.status_id === doneStatus.id
+    );
+    const minSortOrder =
+      doneIssues.length > 0
+        ? Math.min(...doneIssues.map((i) => i.sort_order))
+        : 0;
+    return minSortOrder - 1;
+  }, [projectIssues, doneStatus]);
 
-  const doneTopSortOrder = doneColumnIndex * 1000;
-
-  const isLoading = issueResult.isLoading || statusesResult.isLoading;
+  const isLoading =
+    issueResult.isLoading || statusesResult.isLoading || issuesResult.isLoading;
 
   const updateIssue = useCallback(
     (data: Partial<UpdateIssueRequest>): MutationResult => {
