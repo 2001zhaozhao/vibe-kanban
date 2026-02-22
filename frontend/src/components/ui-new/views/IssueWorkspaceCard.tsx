@@ -149,7 +149,11 @@ export function IssueWorkspaceCard({
     (hasUnseenActivity && !isRunning);
 
   return (
-    <IssueWorkspaceCardContainer onClick={onClick} onContextMenu={onContextMenu} className={className}>
+    <IssueWorkspaceCardContainer
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={className}
+    >
       {/* Row 1: Status badge + Name (left), Owner avatar + menu (right) */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-half min-w-0">

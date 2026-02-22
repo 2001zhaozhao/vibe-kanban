@@ -3,21 +3,53 @@
 use std::time::Duration;
 
 use api_types::{
-    AcceptInvitationResponse, CreateInvitationRequest, CreateInvitationResponse,
-    CreateIssueAssigneeRequest, CreateIssueRequest, CreateIssueTagRequest,
-    CreateOrganizationRequest, CreateOrganizationResponse, CreateWorkspaceRequest, DeleteResponse,
-    DeleteWorkspaceRequest, GetInvitationResponse, GetOrganizationResponse, HandoffInitRequest,
-    HandoffInitResponse, HandoffRedeemRequest, HandoffRedeemResponse, Issue, IssueAssignee,
-    IssueTag, ListAttachmentsResponse, ListInvitationsResponse, ListIssueAssigneesResponse,
-    ListIssueTagsResponse, ListIssuesResponse, ListMembersResponse, ListOrganizationsResponse,
-    ListProjectStatusesResponse, ListProjectsResponse, ListPullRequestsResponse, ListTagsResponse,
-    MutationResponse, Organization, ProfileResponse, RevokeInvitationRequest, Tag,
-    TokenRefreshRequest, TokenRefreshResponse, UpdateIssueRequest, UpdateMemberRoleRequest,
-    UpdateMemberRoleResponse, UpdateOrganizationRequest, UpdateWorkspaceRequest,
-    UpsertPullRequestRequest, Workspace,
-
+    AcceptInvitationResponse,
+    CreateInvitationRequest,
+    CreateInvitationResponse,
+    CreateIssueAssigneeRequest,
+    CreateIssueRequest,
+    CreateIssueTagRequest,
+    CreateOrganizationRequest,
+    CreateOrganizationResponse,
+    CreateWorkspaceRequest,
+    DeleteResponse,
+    DeleteWorkspaceRequest,
+    GetInvitationResponse,
+    GetOrganizationResponse,
+    HandoffInitRequest,
+    HandoffInitResponse,
+    HandoffRedeemRequest,
+    HandoffRedeemResponse,
+    Issue,
+    IssueAssignee,
+    IssueTag,
+    ListAttachmentsResponse,
+    ListInvitationsResponse,
+    ListIssueAssigneesResponse,
+    ListIssueTagsResponse,
+    ListIssuesResponse,
+    ListMembersResponse,
+    ListOrganizationsResponse,
+    ListProjectStatusesResponse,
+    ListProjectsResponse,
+    ListPullRequestsResponse,
+    ListTagsResponse,
+    MutationResponse,
+    Organization,
+    ProfileResponse,
+    RevokeInvitationRequest,
     // Added in vibe-kanban fork
-    SingleUserLoginResponse
+    SingleUserLoginResponse,
+    Tag,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
+    UpdateIssueRequest,
+    UpdateMemberRoleRequest,
+    UpdateMemberRoleResponse,
+    UpdateOrganizationRequest,
+    UpdateWorkspaceRequest,
+    UpsertPullRequestRequest,
+    Workspace,
 };
 use backon::{ExponentialBuilder, Retryable};
 use chrono::Duration as ChronoDuration;
@@ -311,9 +343,7 @@ impl RemoteClient {
     }
 
     /// Performs single-user login on the remote server (public, no auth required).
-    pub async fn single_user_login(
-        &self,
-    ) -> Result<SingleUserLoginResponse, RemoteClientError> {
+    pub async fn single_user_login(&self) -> Result<SingleUserLoginResponse, RemoteClientError> {
         self.post_public("/v1/auth/single-user/login", None::<&()>)
             .await
     }

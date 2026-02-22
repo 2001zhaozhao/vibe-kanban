@@ -1112,11 +1112,7 @@ export const oauthApi = {
       method: 'POST',
     });
     if (!response.ok) {
-      throw new ApiError(
-        'Single-user login failed',
-        response.status,
-        response
-      );
+      throw new ApiError('Single-user login failed', response.status, response);
     }
   },
 };

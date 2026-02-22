@@ -67,10 +67,7 @@ export function RightSidebar({
 
   const hasLinkedIssue = !!remoteWorkspace?.issue_id;
 
-  const [issueExpanded] = usePersistedExpanded(
-    PERSIST_KEYS.issueSection,
-    true
-  );
+  const [issueExpanded] = usePersistedExpanded(PERSIST_KEYS.issueSection, true);
   const [changesExpanded] = usePersistedExpanded(
     PERSIST_KEYS.changesSection,
     true
@@ -123,9 +120,7 @@ export function RightSidebar({
         visible: hasLinkedIssue,
         expanded: issueExpanded,
         content: (
-          <IssueSectionContainer
-            projectId={remoteWorkspace?.project_id}
-          />
+          <IssueSectionContainer projectId={remoteWorkspace?.project_id} />
         ),
         actions: [],
         collapsible: false,

@@ -172,7 +172,10 @@ impl Deployment for LocalDeployment {
                     health.single_user_mode
                 }
                 Err(e) => {
-                    tracing::warn!(?e, "Failed to check remote health; defaulting single_user_mode to false");
+                    tracing::warn!(
+                        ?e,
+                        "Failed to check remote health; defaulting single_user_mode to false"
+                    );
                     false
                 }
             }

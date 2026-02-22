@@ -100,6 +100,9 @@ export interface KanbanIssuePanelProps {
   // Ref for title input (created in container)
   titleInputRef: RefObject<HTMLTextAreaElement>;
 
+  // Multi-line paste overflow handler for title field
+  onTitleMultiLinePaste?: (overflow: string) => void;
+
   // Copy link callback (edit mode only)
   onCopyLink?: () => void;
 
@@ -149,6 +152,7 @@ export function KanbanIssuePanel({
   isUploading,
   attachmentError,
   onDismissAttachmentError,
+  onTitleMultiLinePaste,
 }: KanbanIssuePanelProps) {
   const { t } = useTranslation('common');
   const isCreateMode = mode === 'create';
@@ -267,6 +271,7 @@ export function KanbanIssuePanel({
               value={formData.title}
               onChange={(value) => onFormChange('title', value)}
               onKeyDown={handleTitleKeyDown}
+              onMultiLinePaste={onTitleMultiLinePaste}
               placeholder="Issue Title..."
               autoFocus={isCreateMode}
               aria-label="Issue title"

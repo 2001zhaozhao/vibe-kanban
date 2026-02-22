@@ -48,13 +48,12 @@ export interface LinkedIssueContextValue {
   isLoading: boolean;
   /** Optimistic update for the issue */
   updateIssue: (data: Partial<UpdateIssueRequest>) => MutationResult;
+  /** sort_order to place an issue at the top of the Done column */
+  doneTopSortOrder: number;
 }
 
 export const LinkedIssueContext =
-  createHmrContext<LinkedIssueContextValue | null>(
-    'LinkedIssueContext',
-    null
-  );
+  createHmrContext<LinkedIssueContextValue | null>('LinkedIssueContext', null);
 
 interface LinkedIssueProviderProps {
   /** The issue ID to sync, or null/undefined to disable */
@@ -74,10 +73,7 @@ export function LinkedIssueProvider({
   const issueEnabled = isSignedIn && !!issueId;
   const statusesEnabled = isSignedIn && !!projectId;
 
-  const issueParams = useMemo(
-    () => ({ issue_id: issueId ?? '' }),
-    [issueId]
-  );
+  const issueParams = useMemo(() => ({ issue_id: issueId ?? '' }), [issueId]);
 
   const statusesParams = useMemo(
     () => ({ project_id: projectId ?? '' }),
@@ -117,6 +113,17 @@ export function LinkedIssueProvider({
     issue.status_id === doneStatus.id
   );
 
+  const doneColumnIndex = useMemo(() => {
+    if (!doneStatus) return 1;
+    const visible = statuses
+      .filter((s) => !s.hidden)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const idx = visible.findIndex((s) => s.id === doneStatus.id);
+    return idx === -1 ? 1 : idx + 1;
+  }, [statuses, doneStatus]);
+
+  const doneTopSortOrder = doneColumnIndex * 1000;
+
   const isLoading = issueResult.isLoading || statusesResult.isLoading;
 
   const updateIssue = useCallback(
@@ -137,8 +144,17 @@ export function LinkedIssueProvider({
       isIssueAlreadyDone,
       isLoading,
       updateIssue,
+      doneTopSortOrder,
     }),
-    [issue, statuses, doneStatus, isIssueAlreadyDone, isLoading, updateIssue]
+    [
+      issue,
+      statuses,
+      doneStatus,
+      isIssueAlreadyDone,
+      isLoading,
+      updateIssue,
+      doneTopSortOrder,
+    ]
   );
 
   return (

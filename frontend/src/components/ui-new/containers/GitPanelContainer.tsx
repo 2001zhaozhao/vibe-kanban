@@ -253,7 +253,11 @@ export function GitPanelContainer({
     if (linkedIssue?.isIssueAlreadyDone) return 'already-done';
     if (hasMergeableRepos) return 'merge-and-complete';
     return 'complete-only';
-  }, [remoteWorkspace?.issue_id, linkedIssue?.isIssueAlreadyDone, hasMergeableRepos]);
+  }, [
+    remoteWorkspace?.issue_id,
+    linkedIssue?.isIssueAlreadyDone,
+    hasMergeableRepos,
+  ]);
 
   const [isMergeAllPending, setIsMergeAllPending] = useState(false);
 
@@ -266,9 +270,7 @@ export function GitPanelContainer({
       queryClient.setQueryData<RepoBranchStatus[]>(
         ['branchStatus', selectedWorkspace.id],
         (old) =>
-          old?.map((s) =>
-            ids.has(s.repo_id) ? { ...s, commits_ahead: 0 } : s
-          )
+          old?.map((s) => (ids.has(s.repo_id) ? { ...s, commits_ahead: 0 } : s))
       );
     },
     [selectedWorkspace?.id, queryClient]
@@ -306,13 +308,21 @@ export function GitPanelContainer({
     } finally {
       setIsMergeAllPending(false);
     }
-  }, [selectedWorkspace?.id, isMergeAllPending, mergeableRepos, clearMergedCommitsAhead]);
+  }, [
+    selectedWorkspace?.id,
+    isMergeAllPending,
+    mergeableRepos,
+    clearMergedCommitsAhead,
+  ]);
 
   /** Mark the linked issue as Done via optimistic update (no REST calls). */
   const markIssueAsDone = useCallback(() => {
     if (!linkedIssue?.doneStatus) return;
     try {
-      linkedIssue.updateIssue({ status_id: linkedIssue.doneStatus.id });
+      linkedIssue.updateIssue({
+        status_id: linkedIssue.doneStatus.id,
+        sort_order: linkedIssue.doneTopSortOrder,
+      });
     } catch (kanbanErr) {
       console.warn('Failed to update Kanban issue status to Done', kanbanErr);
       toast.warning('Could not update Kanban status');

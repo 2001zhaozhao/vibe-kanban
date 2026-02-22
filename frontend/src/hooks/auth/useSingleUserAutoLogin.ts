@@ -23,8 +23,6 @@ export function useSingleUserAutoLogin() {
       .singleUserLogin()
       .then(() => reloadSystem())
       .then(() => tokenManager.triggerRefresh())
-      .catch((err) =>
-        console.error('Single-user auto-login failed:', err)
-      );
+      .catch((err) => console.error('Single-user auto-login failed:', err));
   }, [loginStatus, singleUserMode, reloadSystem]);
 }

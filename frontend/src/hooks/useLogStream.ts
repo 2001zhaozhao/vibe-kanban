@@ -66,10 +66,7 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
 
       const addLogEntry = (entry: LogEntry) => {
         // Only add log entry if this WebSocket is still for the current process
-        if (
-          isCancelled ||
-          currentProcessIdRef.current !== capturedProcessId
-        ) {
+        if (isCancelled || currentProcessIdRef.current !== capturedProcessId) {
           return;
         }
         setLogs((prev) => [...prev, entry]);

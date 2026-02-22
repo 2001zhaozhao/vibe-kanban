@@ -13,6 +13,7 @@ export interface AutoResizeTextareaProps
   value: string;
   onChange: (value: string) => void;
   preventNewlines?: boolean;
+  onMultiLinePaste?: (overflow: string) => void;
 }
 
 export const AutoResizeTextarea = React.forwardRef<
@@ -28,6 +29,7 @@ export const AutoResizeTextarea = React.forwardRef<
     onInput,
     onKeyDown,
     onPaste,
+    onMultiLinePaste,
     ...props
   },
   ref
@@ -127,25 +129,31 @@ export const AutoResizeTextarea = React.forwardRef<
       const textarea = event.currentTarget;
       const start = textarea.selectionStart ?? textarea.value.length;
       const end = textarea.selectionEnd ?? textarea.value.length;
-      const sanitizedText = normalizeSingleLineValue(pastedText);
+
+      const lines = pastedText.split(/\r\n|\r|\n/);
+      const firstLine = lines[0];
+      const overflow = lines.slice(1).join('\n');
+
       const nextValue =
-        textarea.value.slice(0, start) +
-        sanitizedText +
-        textarea.value.slice(end);
+        textarea.value.slice(0, start) + firstLine + textarea.value.slice(end);
 
       onChange(nextValue);
+
+      if (overflow && onMultiLinePaste) {
+        onMultiLinePaste(overflow);
+      }
 
       requestAnimationFrame(() => {
         const node = internalRef.current;
         if (!node) return;
 
-        const nextCaret = start + sanitizedText.length;
+        const nextCaret = start + firstLine.length;
         node.setSelectionRange(nextCaret, nextCaret);
       });
 
       onPaste?.(event);
     },
-    [onChange, onPaste, preventNewlines]
+    [onChange, onPaste, onMultiLinePaste, preventNewlines]
   );
 
   return (

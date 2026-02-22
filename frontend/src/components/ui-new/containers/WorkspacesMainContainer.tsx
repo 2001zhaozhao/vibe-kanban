@@ -45,7 +45,7 @@ export const WorkspacesMainContainer = forwardRef<
   },
   ref
 ) {
-  const { diffStats } = useWorkspaceContext();
+  const { diffStats, startNewSession } = useWorkspaceContext();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLElement>(null);
   const conversationListRef = useRef<ConversationListHandle>(null);
@@ -89,6 +89,7 @@ export const WorkspacesMainContainer = forwardRef<
       onCreateWorkspace={handleCreateWorkspace}
       containerRef={containerRef}
       isNewSessionMode={isNewSessionMode}
+      onStartNewSession={startNewSession}
       diffStats={{
         filesChanged: diffStats.files_changed,
         linesAdded: diffStats.lines_added,

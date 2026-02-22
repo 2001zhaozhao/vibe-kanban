@@ -35,6 +35,8 @@ interface WorkspacesMainProps {
   conversationListRef: RefObject<ConversationListHandle>;
   /** Whether user is creating a new session */
   isNewSessionMode?: boolean;
+  /** Callback to start a new session */
+  onStartNewSession?: () => void;
   /** Diff statistics from the workspace */
   diffStats?: DiffStats;
   /** Callback to scroll to previous user message */
@@ -53,6 +55,7 @@ export function WorkspacesMain({
   containerRef,
   conversationListRef,
   isNewSessionMode,
+  onStartNewSession,
   diffStats,
   onScrollToPreviousMessage,
   onScrollToBottom,
@@ -110,9 +113,16 @@ export function WorkspacesMain({
                         workspaceId: workspaceWithSession.id,
                         onSelectSession,
                       }
-                    : {
-                        mode: 'placeholder',
-                      })}
+                    : session
+                      ? {
+                          mode: 'existing-session',
+                          session,
+                          onSelectSession,
+                          onStartNewSession,
+                        }
+                      : {
+                          mode: 'placeholder',
+                        })}
                   sessions={sessions}
                   filesChanged={diffStats?.filesChanged ?? 0}
                   linesAdded={diffStats?.linesAdded ?? 0}

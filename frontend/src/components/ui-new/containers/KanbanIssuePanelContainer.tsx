@@ -951,6 +951,18 @@ export function KanbanIssuePanelContainer() {
     navigator.clipboard.writeText(url);
   }, [projectId, selectedKanbanIssueId]);
 
+  // Multi-line paste overflow handler for title field
+  const handleTitleMultiLinePaste = useCallback(
+    (overflow: string) => {
+      const currentDescription = displayData.description ?? '';
+      const newDescription = currentDescription
+        ? overflow + '\n\n' + currentDescription
+        : overflow;
+      void handlePropertyChange('description', newDescription);
+    },
+    [displayData.description, handlePropertyChange]
+  );
+
   // More actions callback - opens command bar with issue actions
   const handleMoreActions = useCallback(async () => {
     if (!selectedKanbanIssueId || !projectId) return;
@@ -1008,6 +1020,7 @@ export function KanbanIssuePanelContainer() {
       isUploading={isUploading}
       attachmentError={uploadError}
       onDismissAttachmentError={clearUploadError}
+      onTitleMultiLinePaste={handleTitleMultiLinePaste}
     />
   );
 }
