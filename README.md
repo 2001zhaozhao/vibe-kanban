@@ -35,6 +35,10 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   workspace previews in the Kanban page.
 * When pasting multi-text into the title of a new issue in the kanban board,
   any additional lines will overflow into the description.
+* Added the ability to archive workspaces in the kanban board issue-linked workspace dropdown.
+  This saves several clicks every time you are done with a task but did not merge into the main branch
+  (e.g. for exploration tasks or tasks you decide to abandon).
+* 
 
 ## TLS Setup Guide
 
