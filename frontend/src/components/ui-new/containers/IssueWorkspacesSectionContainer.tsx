@@ -234,6 +234,35 @@ export function IssueWorkspacesSectionContainer({
     [t]
   );
 
+  // Handle archiving a workspace
+  const handleArchiveWorkspace = useCallback(
+    async (localWorkspaceId: string) => {
+      const result = await ConfirmDialog.show({
+        title: t('workspaces.archive'),
+        message: t('workspaces.archiveConfirmMessage'),
+        confirmText: t('workspaces.archive'),
+        variant: 'default',
+      });
+
+      if (result === 'confirmed') {
+        try {
+          await attemptsApi.update(localWorkspaceId, { archived: true });
+        } catch (error) {
+          ConfirmDialog.show({
+            title: t('common:error'),
+            message:
+              error instanceof Error
+                ? error.message
+                : t('workspaces.archiveError'),
+            confirmText: t('common:ok'),
+            showCancelButton: false,
+          });
+        }
+      }
+    },
+    [t]
+  );
+
   // Handle deleting a workspace (unlinks first, then deletes local)
   const handleDeleteWorkspace = useCallback(
     async (localWorkspaceId: string) => {
@@ -305,6 +334,7 @@ export function IssueWorkspacesSectionContainer({
       onWorkspaceRightClick={handleWorkspaceRightClick}
       onCreateWorkspace={handleAddWorkspace}
       onUnlinkWorkspace={handleUnlinkWorkspace}
+      onArchiveWorkspace={handleArchiveWorkspace}
       onDeleteWorkspace={handleDeleteWorkspace}
       shouldAnimateCreateButton={shouldAnimateCreateButton}
     />
