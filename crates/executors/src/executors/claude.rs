@@ -245,7 +245,8 @@ fn default_discovered_options() -> crate::executor_discovery::ExecutorDiscovered
                 ("claude-opus-4-6", "Opus"),
                 ("claude-opus-4-6[1m]", "Opus (1M context)"),
                 ("claude-haiku-4-5-20251001", "Haiku"),
-                ("claude-sonnet-4-5-20250929", "Sonnet"),
+                ("claude-sonnet-4-5-20250929", "Sonnet 4.5"),
+                ("claude-sonnet-4-6", "Sonnet 4.6"),
             ]
             .into_iter()
             .map(|(id, name)| ModelInfo {
