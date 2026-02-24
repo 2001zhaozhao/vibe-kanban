@@ -27,6 +27,7 @@ import type {
   ExecutorProfileId,
   ConflictOp,
 } from 'shared/types';
+import { PermissionPolicy } from 'shared/types';
 
 export interface ResolveConflictsDialogProps {
   workspaceId: string;
@@ -94,6 +95,10 @@ const ResolveConflictsDialogImpl =
           if (!config) return null;
           return { executor: config.executor, variant: config.variant ?? null };
         }, [sessionProcesses]);
+      const sessionPermissionPolicy = useMemo(() => {
+        const config = getLatestConfigFromProcesses(sessionProcesses);
+        return config?.permission_policy ?? null;
+      }, [sessionProcesses]);
 
       const resolvedDefaultProfile = useMemo(() => {
         // Prefer the full profile (executor+variant) from the session's processes
@@ -168,6 +173,10 @@ const ResolveConflictsDialogImpl =
             executor_config: {
               executor: effectiveProfile.executor,
               variant: effectiveProfile.variant,
+              // Override Plan mode with Auto mode for conflict resolution
+              ...(sessionPermissionPolicy === PermissionPolicy.PLAN
+                ? { permission_policy: PermissionPolicy.AUTO }
+                : {}),
             },
             retry_process_id: null,
             force_when_dirty: null,
@@ -206,6 +215,7 @@ const ResolveConflictsDialogImpl =
         }
       }, [
         effectiveProfile,
+        sessionPermissionPolicy,
         selectedSessionId,
         createNewSession,
         workspaceId,
