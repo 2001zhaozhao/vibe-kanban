@@ -283,6 +283,15 @@ async fn get_token(
 ) -> Result<ResponseJson<ApiResponse<TokenResponse>>, ApiError> {
     let remote_client = deployment.remote_client()?;
 
+    // In single-user mode, no real token is needed — the remote server
+    // bypasses JWT auth. Return a placeholder token for ElectricSQL.
+    if remote_client.single_user_mode() {
+        return Ok(ResponseJson(ApiResponse::success(TokenResponse {
+            access_token: "single-user-mode".to_string(),
+            expires_at: None,
+        })));
+    }
+
     // This will auto-refresh the token if expired
     let access_token = remote_client
         .access_token()
@@ -302,6 +311,15 @@ async fn get_current_user(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<CurrentUserResponse>>, ApiError> {
     let remote_client = deployment.remote_client()?;
+
+    // In single-user mode, return the deterministic single-user UUID directly.
+    if remote_client.single_user_mode() {
+        let user_id =
+            Uuid::new_v5(&Uuid::NAMESPACE_URL, b"vibekanban-single-user-local").to_string();
+        return Ok(ResponseJson(ApiResponse::success(CurrentUserResponse {
+            user_id,
+        })));
+    }
 
     // Get the access token from remote client
     let access_token = remote_client
@@ -332,22 +350,26 @@ async fn single_user_login(
         .await
         .map_err(|e| ApiError::BadRequest(format!("Single-user login failed: {e}")))?;
 
-    let expires_at = extract_expiration(&response.access_token)
-        .map_err(|err| ApiError::BadRequest(format!("Invalid access token: {err}")))?;
-    let credentials = Credentials {
-        access_token: Some(response.access_token.clone()),
-        refresh_token: response.refresh_token.clone(),
-        expires_at: Some(expires_at),
-    };
+    // In single-user mode, don't save JWT tokens locally — the remote server
+    // bypasses JWT auth for the deterministic user, so tokens aren't needed.
+    if !deployment.single_user_mode() {
+        let expires_at = extract_expiration(&response.access_token)
+            .map_err(|err| ApiError::BadRequest(format!("Invalid access token: {err}")))?;
+        let credentials = Credentials {
+            access_token: Some(response.access_token.clone()),
+            refresh_token: response.refresh_token.clone(),
+            expires_at: Some(expires_at),
+        };
 
-    deployment
-        .auth_context()
-        .save_credentials(&credentials)
-        .await
-        .map_err(|e| {
-            tracing::error!(?e, "failed to save credentials");
-            ApiError::Io(e)
-        })?;
+        deployment
+            .auth_context()
+            .save_credentials(&credentials)
+            .await
+            .map_err(|e| {
+                tracing::error!(?e, "failed to save credentials");
+                ApiError::Io(e)
+            })?;
+    }
 
     // Fetch and cache the user's profile
     let _ = deployment.get_login_status().await;

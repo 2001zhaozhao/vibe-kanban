@@ -33,6 +33,38 @@ pub async fn require_session(
     mut req: Request<Body>,
     next: Next,
 ) -> Response {
+    // In single-user mode, skip JWT auth entirely and use the deterministic user
+    if state.single_user_mode() {
+        let user_id = Uuid::new_v5(&Uuid::NAMESPACE_URL, b"vibekanban-single-user-local");
+        let pool = state.pool();
+        let user_repo = UserRepository::new(pool);
+        let user = match user_repo.fetch_user(user_id).await {
+            Ok(user) => user,
+            Err(IdentityError::NotFound) => {
+                warn!("single-user not bootstrapped yet; call /v1/auth/single-user/login first");
+                return StatusCode::UNAUTHORIZED.into_response();
+            }
+            Err(IdentityError::Database(error)) => {
+                warn!(?error, "failed to load single user");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+            Err(_) => {
+                warn!("unexpected error loading single user");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+
+        configure_user_scope(user.id, user.username.as_deref(), Some(user.email.as_str()));
+
+        req.extensions_mut().insert(RequestContext {
+            user,
+            session_id: Uuid::nil(),
+            access_token_expires_at: Utc::now() + chrono::Duration::days(365),
+        });
+
+        return next.run(req).await;
+    }
+
     let bearer = match req.headers().typed_get::<Authorization<Bearer>>() {
         Some(Authorization(token)) => token.token().to_owned(),
         None => return StatusCode::UNAUTHORIZED.into_response(),

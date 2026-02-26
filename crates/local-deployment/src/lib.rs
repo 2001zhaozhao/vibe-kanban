@@ -146,7 +146,7 @@ impl Deployment for LocalDeployment {
             .or_else(|| option_env!("VK_SHARED_API_BASE").map(|s| s.to_string()));
 
         let remote_client = match &api_base {
-            Some(url) => match RemoteClient::new(url, auth_context.clone()) {
+            Some(url) => match RemoteClient::new(url, auth_context.clone(), false) {
                 Ok(client) => {
                     tracing::info!("Remote client initialized with URL: {}", url);
                     Ok(client)
@@ -181,6 +181,25 @@ impl Deployment for LocalDeployment {
             }
         } else {
             false
+        };
+
+        // Recreate the remote client with single_user_mode if needed
+        let remote_client = if single_user_mode {
+            match &api_base {
+                Some(url) => match RemoteClient::new(url, auth_context.clone(), true) {
+                    Ok(client) => {
+                        tracing::info!("Recreated remote client with single-user mode enabled");
+                        Ok(client)
+                    }
+                    Err(e) => {
+                        tracing::error!(?e, "failed to recreate remote client");
+                        Err(RemoteClientNotConfigured)
+                    }
+                },
+                None => Err(RemoteClientNotConfigured),
+            }
+        } else {
+            remote_client
         };
 
         let oauth_handoffs = Arc::new(RwLock::new(HashMap::new()));
@@ -316,6 +335,31 @@ impl LocalDeployment {
     }
 
     pub async fn get_login_status(&self) -> LoginStatus {
+        // In single-user mode, skip credential checks — the remote server
+        // handles auth via the deterministic user, so we just need to fetch the profile.
+        if self.single_user_mode {
+            if let Some(cached_profile) = self.auth_context.cached_profile().await {
+                return LoginStatus::LoggedIn {
+                    profile: cached_profile,
+                };
+            }
+
+            let Ok(client) = self.remote_client() else {
+                return LoginStatus::LoggedOut;
+            };
+
+            return match client.profile().await {
+                Ok(profile) => {
+                    self.auth_context.set_profile(profile.clone()).await;
+                    LoginStatus::LoggedIn { profile }
+                }
+                Err(e) => {
+                    tracing::warn!(?e, "single-user profile fetch failed");
+                    LoginStatus::LoggedOut
+                }
+            };
+        }
+
         if self.auth_context.get_credentials().await.is_none() {
             self.auth_context.clear_profile().await;
             return LoginStatus::LoggedOut;

@@ -115,6 +115,7 @@ pub struct RemoteClient {
     base: Url,
     http: Client,
     auth_context: AuthContext,
+    single_user_mode: bool,
 }
 
 impl std::fmt::Debug for RemoteClient {
@@ -123,6 +124,7 @@ impl std::fmt::Debug for RemoteClient {
             .field("base", &self.base)
             .field("http", &self.http)
             .field("auth_context", &"<present>")
+            .field("single_user_mode", &self.single_user_mode)
             .finish()
     }
 }
@@ -133,6 +135,7 @@ impl Clone for RemoteClient {
             base: self.base.clone(),
             http: self.http.clone(),
             auth_context: self.auth_context.clone(),
+            single_user_mode: self.single_user_mode,
         }
     }
 }
@@ -142,7 +145,11 @@ impl RemoteClient {
     const TOKEN_REFRESH_REQUEST_TIMEOUT: Duration = Duration::from_mins(5);
     const TOKEN_REFRESH_LEEWAY_SECS: i64 = 20;
 
-    pub fn new(base_url: &str, auth_context: AuthContext) -> Result<Self, RemoteClientError> {
+    pub fn new(
+        base_url: &str,
+        auth_context: AuthContext,
+        single_user_mode: bool,
+    ) -> Result<Self, RemoteClientError> {
         let base = Url::parse(base_url).map_err(|e| RemoteClientError::Url(e.to_string()))?;
         let mut builder = Client::builder()
             .timeout(Self::REQUEST_TIMEOUT)
@@ -160,6 +167,7 @@ impl RemoteClient {
             base,
             http,
             auth_context,
+            single_user_mode,
         })
     }
 
@@ -269,6 +277,11 @@ impl RemoteClient {
         self.base.as_str()
     }
 
+    /// Returns whether this client is in single-user mode.
+    pub fn single_user_mode(&self) -> bool {
+        self.single_user_mode
+    }
+
     /// Returns a valid access token for use-cases like maintaining a websocket connection.
     pub async fn access_token(&self) -> Result<String, RemoteClientError> {
         self.require_token().await
@@ -357,7 +370,7 @@ impl RemoteClient {
                 req = req.timeout(t);
             }
 
-            if requires_auth {
+            if requires_auth && !self.single_user_mode {
                 let token = self.require_token().await?;
                 req = req.bearer_auth(token);
             }
