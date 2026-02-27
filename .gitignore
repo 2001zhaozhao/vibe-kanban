@@ -90,3 +90,6 @@ vibe-kanban-cloud/
 # Local TLS certificates
 /crates/remote/localhost-cert.pem
 /crates/remote/localhost-key.pem
+
+# Local development files folder
+local/
