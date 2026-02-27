@@ -2,7 +2,11 @@ import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { createCollection } from '@tanstack/react-db';
 
 import { tokenManager } from '../auth/tokenManager';
-import { getRemoteApiUrl, makeRequest } from '@/lib/remoteApi';
+import {
+  getRemoteApiUrl,
+  getRemoteApiBasicAuth,
+  makeRequest,
+} from '@/lib/remoteApi';
 import type { MutationDefinition, ShapeDefinition } from 'shared/remote-types';
 import type { CollectionConfig, SyncError } from './types';
 
@@ -342,12 +346,18 @@ function createElectricShapeOptions(args: {
   });
 
   const url = buildUrl(args.shape.url, args.params);
+  const basicAuth = getRemoteApiBasicAuth();
 
   return {
     url: `${getRemoteApiUrl()}${url}`,
     params: args.params,
     headers: {
       Authorization: async () => {
+        // When the remote API URL had embedded credentials (user:pass@host),
+        // use Basic auth so the reverse proxy can authenticate the request.
+        if (basicAuth) {
+          return `Basic ${basicAuth}`;
+        }
         const token = await tokenManager.getToken();
         if (!token) {
           isPaused = true;

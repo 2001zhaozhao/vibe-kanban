@@ -151,13 +151,20 @@ pub fn router(state: AppState) -> Router {
         .layer(middleware::from_fn(
             crate::middleware::version::add_version_headers,
         ))
-        .layer(
+        .layer(if state.single_user_mode() {
+            // In single-user mode access control is handled externally (e.g. a
+            // reverse proxy with Basic auth), so allow requests from any origin.
+            CorsLayer::new()
+                .allow_origin(AllowOrigin::any())
+                .allow_methods(AllowMethods::mirror_request())
+                .allow_headers(AllowHeaders::mirror_request())
+        } else {
             CorsLayer::new()
                 .allow_origin(AllowOrigin::mirror_request())
                 .allow_methods(AllowMethods::mirror_request())
                 .allow_headers(AllowHeaders::mirror_request())
-                .allow_credentials(true),
-        )
+                .allow_credentials(true)
+        })
         .layer(trace_layer)
         .layer(PropagateRequestIdLayer::new(HeaderName::from_static(
             "x-request-id",
