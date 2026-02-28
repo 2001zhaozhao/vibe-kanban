@@ -288,6 +288,13 @@ struct LogState {
     patches: HashMap<String, PatchState>,
     web_searches: HashMap<String, WebSearchState>,
     review: Option<ReviewState>,
+    model_params: ModelParamsState,
+}
+
+struct ModelParamsState {
+    index: Option<usize>,
+    model: Option<String>,
+    reasoning_effort: Option<ReasoningEffort>,
 }
 
 enum StreamingTextKind {
@@ -306,6 +313,11 @@ impl LogState {
             patches: HashMap::new(),
             web_searches: HashMap::new(),
             review: None,
+            model_params: ModelParamsState {
+                index: None,
+                model: None,
+                reasoning_effort: None,
+            },
         }
     }
 
@@ -375,6 +387,39 @@ impl LogState {
 
     fn thinking(&mut self, content: String) -> (NormalizedEntry, usize, bool) {
         self.streaming_text_set(content, StreamingTextKind::Thinking)
+    }
+
+    fn update_tool_status(
+        &mut self,
+        call_id: &str,
+        status: ToolStatus,
+        clear_awaiting: bool,
+        msg_store: &Arc<MsgStore>,
+    ) {
+        if let Some(cmd) = self.commands.get_mut(call_id) {
+            cmd.status = status.clone();
+            if clear_awaiting {
+                cmd.awaiting_approval = false;
+            }
+            if let Some(index) = cmd.index {
+                replace_normalized_entry(msg_store, index, cmd.to_normalized_entry());
+            }
+        } else if let Some(mcp) = self.mcp_tools.get_mut(call_id) {
+            mcp.status = status.clone();
+            if let Some(index) = mcp.index {
+                replace_normalized_entry(msg_store, index, mcp.to_normalized_entry());
+            }
+        } else if let Some(patch_state) = self.patches.get_mut(call_id) {
+            for entry in &mut patch_state.entries {
+                entry.status = status.clone();
+                if clear_awaiting {
+                    entry.awaiting_approval = false;
+                }
+                if let Some(index) = entry.index {
+                    replace_normalized_entry(msg_store, index, entry.to_normalized_entry());
+                }
+            }
+        }
     }
 }
 
@@ -485,14 +530,41 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
             }
 
             if let Ok(approval) = serde_json::from_str::<Approval>(&line) {
-                if let Some(entry) = approval.to_normalized_entry_opt() {
-                    add_normalized_entry(&msg_store, &entry_index, entry);
+                match &approval {
+                    Approval::ApprovalRequested {
+                        call_id,
+                        approval_id,
+                        ..
+                    } => {
+                        let pending_status = ToolStatus::PendingApproval {
+                            approval_id: approval_id.clone(),
+                        };
+                        state.update_tool_status(call_id, pending_status, false, &msg_store);
+                    }
+                    Approval::ApprovalResponse {
+                        call_id,
+                        approval_status,
+                        ..
+                    } => {
+                        if let Some(status) = ToolStatus::from_approval_status(approval_status) {
+                            state.update_tool_status(call_id, status, true, &msg_store);
+                        }
+
+                        if let Some(entry) = approval.to_normalized_entry_opt() {
+                            add_normalized_entry(&msg_store, &entry_index, entry);
+                        }
+                    }
                 }
                 continue;
             }
 
             if let Ok(response) = serde_json::from_str::<JSONRPCResponse>(&line) {
-                handle_jsonrpc_response(response, &msg_store, &entry_index);
+                handle_jsonrpc_response(
+                    response,
+                    &msg_store,
+                    &entry_index,
+                    &mut state.model_params,
+                );
                 continue;
             }
 
@@ -502,10 +574,11 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                 {
                     msg_store.push_session_id(session_configured.session_id.to_string());
                     handle_model_params(
-                        session_configured.model,
+                        Some(session_configured.model),
                         session_configured.reasoning_effort,
                         &msg_store,
                         &entry_index,
+                        &mut state.model_params,
                     );
                 };
                 continue;
@@ -540,10 +613,11 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                 EventMsg::SessionConfigured(payload) => {
                     msg_store.push_session_id(payload.session_id.to_string());
                     handle_model_params(
-                        payload.model,
+                        Some(payload.model),
                         payload.reasoning_effort,
                         &msg_store,
                         &entry_index,
+                        &mut state.model_params,
                     );
                 }
                 EventMsg::AgentMessageDelta(AgentMessageDeltaEvent { delta }) => {
@@ -1226,6 +1300,7 @@ fn handle_jsonrpc_response(
     response: JSONRPCResponse,
     msg_store: &Arc<MsgStore>,
     entry_index: &EntryIndexProvider,
+    model_params: &mut ModelParamsState,
 ) {
     let Ok(response) = serde_json::from_value::<NewConversationResponse>(response.result.clone())
     else {
@@ -1238,35 +1313,49 @@ fn handle_jsonrpc_response(
     }
 
     handle_model_params(
-        response.model,
+        Some(response.model),
         response.reasoning_effort,
         msg_store,
         entry_index,
+        model_params,
     );
 }
 
 fn handle_model_params(
-    model: String,
+    model: Option<String>,
     reasoning_effort: Option<ReasoningEffort>,
     msg_store: &Arc<MsgStore>,
     entry_index: &EntryIndexProvider,
+    state: &mut ModelParamsState,
 ) {
-    let mut params = vec![];
-    params.push(format!("model: {model}"));
+    if let Some(model) = model {
+        state.model = Some(model);
+    }
     if let Some(reasoning_effort) = reasoning_effort {
+        state.reasoning_effort = Some(reasoning_effort);
+    }
+
+    let mut params = vec![];
+    if let Some(model) = &state.model {
+        params.push(format!("model: {model}"));
+    }
+    if let Some(reasoning_effort) = &state.reasoning_effort {
         params.push(format!("reasoning effort: {reasoning_effort}"));
     }
 
-    add_normalized_entry(
-        msg_store,
-        entry_index,
-        NormalizedEntry {
-            timestamp: None,
-            entry_type: NormalizedEntryType::SystemMessage,
-            content: params.join("  ").to_string(),
-            metadata: None,
-        },
-    );
+    if params.is_empty() {
+        return;
+    }
+
+    let is_new = state.index.is_none();
+    let index = *state.index.get_or_insert_with(|| entry_index.next());
+    let entry = NormalizedEntry {
+        timestamp: None,
+        entry_type: NormalizedEntryType::SystemMessage,
+        content: params.join("  "),
+        metadata: None,
+    };
+    upsert_normalized_entry(msg_store, index, entry, is_new);
 }
 
 fn build_command_output(stdout: Option<&str>, stderr: Option<&str>) -> Option<String> {
@@ -1340,6 +1429,11 @@ impl ToNormalizedEntry for Error {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Approval {
+    ApprovalRequested {
+        call_id: String,
+        tool_name: String,
+        approval_id: String,
+    },
     ApprovalResponse {
         call_id: String,
         tool_name: String,
@@ -1348,6 +1442,14 @@ pub enum Approval {
 }
 
 impl Approval {
+    pub fn approval_requested(call_id: String, tool_name: String, approval_id: String) -> Self {
+        Self::ApprovalRequested {
+            call_id,
+            tool_name,
+            approval_id,
+        }
+    }
+
     pub fn approval_response(
         call_id: String,
         tool_name: String,
@@ -1365,27 +1467,29 @@ impl Approval {
     }
 
     pub fn display_tool_name(&self) -> String {
-        let Self::ApprovalResponse { tool_name, .. } = self;
-        match tool_name.as_str() {
-            "codex.exec_command" => "Exec Command".to_string(),
-            "codex.apply_patch" => "Edit".to_string(),
-            other => other.to_string(),
+        match self {
+            Self::ApprovalRequested { tool_name, .. }
+            | Self::ApprovalResponse { tool_name, .. } => match tool_name.as_str() {
+                "codex.exec_command" => "Exec Command".to_string(),
+                "codex.apply_patch" => "Edit".to_string(),
+                other => other.to_string(),
+            },
         }
     }
 }
 
 impl ToNormalizedEntryOpt for Approval {
     fn to_normalized_entry_opt(&self) -> Option<NormalizedEntry> {
-        let Self::ApprovalResponse {
-            call_id: _,
-            tool_name: _,
-            approval_status,
-        } = self;
+        let approval_status = match self {
+            Self::ApprovalResponse {
+                approval_status, ..
+            } => approval_status,
+            Self::ApprovalRequested { .. } => return None,
+        };
         let tool_name = self.display_tool_name();
 
         match approval_status {
-            ApprovalStatus::Pending => None,
-            ApprovalStatus::Approved => None,
+            ApprovalStatus::Pending | ApprovalStatus::Approved => None,
             ApprovalStatus::Denied { reason } => Some(NormalizedEntry {
                 timestamp: None,
                 entry_type: NormalizedEntryType::UserFeedback {

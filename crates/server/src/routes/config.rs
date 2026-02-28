@@ -4,10 +4,7 @@ use api_types::LoginStatus;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{
-        Path, Query, State,
-        ws::{WebSocket, WebSocketUpgrade},
-    },
+    extract::{Path, Query, State, ws::Message},
     http,
     response::{IntoResponse, Json as ResponseJson, Response},
     routing::{get, put},
@@ -35,7 +32,12 @@ use ts_rs::TS;
 use utils::{assets::config_path, log_msg::LogMsg, response::ApiResponse};
 use uuid::Uuid;
 
-use crate::{DeploymentImpl, error::ApiError};
+use crate::{
+    DeploymentImpl,
+    error::ApiError,
+    routes::relay_ws::{SignedWebSocket, SignedWsUpgrade},
+    tunnel,
+};
 
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
@@ -200,6 +202,25 @@ async fn track_config_events(deployment: &DeploymentImpl, old: &Config, new: &Co
 
 async fn handle_config_events(deployment: &DeploymentImpl, old: &Config, new: &Config) {
     track_config_events(deployment, old, new).await;
+
+    let old_relay_host_name = tunnel::effective_relay_host_name(old, deployment.user_id());
+    let new_relay_host_name = tunnel::effective_relay_host_name(new, deployment.user_id());
+
+    deployment
+        .server_info()
+        .set_hostname(new_relay_host_name.clone())
+        .await;
+
+    match (old.relay_enabled, new.relay_enabled) {
+        (false, true) => tunnel::spawn_relay(deployment).await,
+        (true, false) => tunnel::stop_relay(deployment).await,
+        (true, true) => {
+            if old_relay_host_name != new_relay_host_name {
+                tunnel::spawn_relay(deployment).await;
+            }
+        }
+        (false, false) => (),
+    }
 }
 
 async fn get_sound(Path(sound): Path<SoundFile>) -> Result<Response, ApiError> {
@@ -541,7 +562,7 @@ pub struct ExecutorDiscoveredOptionsStreamQuery {
 }
 
 pub async fn stream_executor_discovered_options_ws(
-    ws: WebSocketUpgrade,
+    ws: SignedWsUpgrade,
     State(deployment): State<DeploymentImpl>,
     Query(query): Query<ExecutorDiscoveredOptionsStreamQuery>,
 ) -> impl IntoResponse {
@@ -553,15 +574,11 @@ pub async fn stream_executor_discovered_options_ws(
 }
 
 async fn handle_executor_discovered_options_ws(
-    socket: WebSocket,
+    mut socket: SignedWebSocket,
     deployment: DeploymentImpl,
     query: ExecutorDiscoveredOptionsStreamQuery,
 ) -> anyhow::Result<()> {
-    use futures_util::{SinkExt, StreamExt};
-
-    let (mut sender, mut receiver) = socket.split();
-
-    tokio::spawn(async move { while let Some(Ok(_)) = receiver.next().await {} });
+    use futures_util::StreamExt;
 
     match deployment
         .container()
@@ -574,32 +591,47 @@ async fn handle_executor_discovered_options_ws(
     {
         Ok(Some(mut stream)) => {
             if let Some(patch) = stream.next().await {
-                let _ = sender
+                let _ = socket
                     .send(LogMsg::JsonPatch(patch).to_ws_message_unchecked())
                     .await;
             }
 
-            let _ = sender.send(LogMsg::Ready.to_ws_message_unchecked()).await;
+            let _ = socket.send(LogMsg::Ready.to_ws_message_unchecked()).await;
 
-            while let Some(patch) = stream.next().await {
-                if sender
-                    .send(LogMsg::JsonPatch(patch).to_ws_message_unchecked())
-                    .await
-                    .is_err()
-                {
-                    break;
+            loop {
+                tokio::select! {
+                    patch = stream.next() => {
+                        let Some(patch) = patch else {
+                            break;
+                        };
+                        if socket
+                            .send(LogMsg::JsonPatch(patch).to_ws_message_unchecked())
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    inbound = socket.recv() => {
+                        match inbound {
+                            Ok(Some(Message::Close(_))) => break,
+                            Ok(Some(_)) => {}
+                            Ok(None) => break,
+                            Err(_) => break,
+                        }
+                    }
                 }
             }
         }
         Ok(None) => {
-            let _ = sender.send(LogMsg::Ready.to_ws_message_unchecked()).await;
+            let _ = socket.send(LogMsg::Ready.to_ws_message_unchecked()).await;
         }
         Err(e) => {
             tracing::warn!("Failed to start discovered options stream: {}", e);
         }
     }
 
-    let _ = sender
+    let _ = socket
         .send(LogMsg::Finished.to_ws_message_unchecked())
         .await;
     Ok(())

@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    auth::ProviderTokenDetails,
     db::{
         auth::AuthSessionRepository,
         oauth_accounts::{OAuthAccountInsert, OAuthAccountRepository},
@@ -123,6 +122,7 @@ async fn single_user_login(
             username: Some("local"),
             display_name: Some("Local User"),
             avatar_url: None,
+            encrypted_provider_tokens: None,
         })
         .await?;
 
@@ -130,17 +130,9 @@ async fn single_user_login(
     let session_repo = AuthSessionRepository::new(state.pool());
     let session = session_repo.create(user_id, None).await?;
 
-    // 5. Build provider token details
-    let provider_token = ProviderTokenDetails {
-        provider: "local".to_string(),
-        access_token: "single-user-token".to_string(),
-        refresh_token: None,
-        expires_at: None,
-    };
-
-    // 6. Generate JWT tokens
+    // 5. Generate JWT tokens
     let jwt = state.jwt();
-    let tokens = jwt.generate_tokens(&session, &user, provider_token)?;
+    let tokens = jwt.generate_tokens(&session, &user, "local")?;
 
     // 7. Set refresh token on session
     session_repo

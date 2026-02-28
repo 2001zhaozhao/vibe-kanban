@@ -1,6 +1,6 @@
 [package]
 name = "remote"
-version = "0.1.10"
+version = "0.1.16"
 edition = "2024"
 publish = false
 
@@ -10,11 +10,9 @@ path = "src/bin/generate_types.rs"
 
 [features]
 default = []
-vk-billing = ["dep:billing"]
+vk-billing = []
 
 [dependencies]
-# private crate for billing functionality
-billing = { git = "ssh://git@github.com/BloopAI/vibe-kanban-private", branch = "main", package = "billing", optional = true }
 
 anyhow = "1.0"
 axum = { version = "0.8.4", features = ["macros", "multipart", "ws"] }
@@ -23,9 +21,14 @@ axum-server = { version = "0.8", features = ["tls-rustls"] }
 aes-gcm = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
+futures-util = "0.3"
 async-trait = "0.1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots-no-provider", "stream"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+bytes = "1"
+hyper = { version = "1", features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio-yamux = "0.3.17"
 secrecy = "0.10.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
@@ -51,6 +54,7 @@ hex = "0.4"
 urlencoding = "2.1"
 url = "2.5"
 base64 = "0.22"
+rmp-serde = "1.3"
 aws-sdk-s3 = { version = "1.65", default-features = false, features = ["behavior-version-latest", "rt-tokio"] }
 aws-credential-types = "1.2"
 azure_core = "0.31"
