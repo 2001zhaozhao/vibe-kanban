@@ -1,5 +1,7 @@
 # 2001zhaozhao's Vibe-Kanban Fork
 
+`Disclaimer: the extra README sections in this fork are written by a human.`
+
 A fork of Vibe-Kanban with various improvements.
 
 The improvements are AI-coded with bare minimum quality control, as I don't intend to contribute them.
@@ -13,6 +15,9 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   * Allows skipping GitHub/Google OAuth and support a local account when self-hosting both the remote server,
     local server, and frontend.
   * All new Vibe-Kanban features such as organizations, projects, and the kanban board work properly.
+  * You can remotely deploy vibe-kanban in Single User Mode to skip authentication.
+    Configuring separate authentication via HTTP proxy Basic Auth is fully supported and provides
+    security reassurances that do not depend on vibe-kanban itself.
 * Added a convenience button to Merge All repositories, and a variant that also moves the linked issue to Done.
   * The feature is adaptive: if code is already merged, the Merge button will be disabled,
     and the Merge & Complete button can still move issue to done.
@@ -29,6 +34,7 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
 * Added TLS support for the local development remote server, enabling HTTP/2 and removing a browser concurrent
   connections limit issue that caused unusable performance when running the original `vibe-kanban` setup locally.
   Additional setup is required, see the `TLS Setup Guide` section below.
+  * The TLS support is optional. You can leave it disabled if you are running the remote server behind a HTTPS proxy.
 * Added the ability to right click a workspace card in the Project / Kanban Board page to directly go to the
   full-screen workspace view. Left click still shows a preview of the workspace just like before.
 * Fixed a bug where agent logs from one workspace appears to show up in another workspace if directly switching between
@@ -38,7 +44,6 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
 * Added the ability to archive workspaces in the kanban board issue-linked workspace dropdown.
   This saves several clicks every time you are done with a task but did not merge into the main branch
   (e.g. for exploration tasks or tasks you decide to abandon).
-* 
 
 ## TLS Setup Guide
 
@@ -70,6 +75,33 @@ TLS_KEY_PATH=localhost-key.pem
 And update VK_SHARED_API_BASE to use https://:
 VK_SHARED_API_BASE=https://localhost:3000
 ```
+
+## My Own Deployment
+
+This is how I personally deploy this Vibe-Kanban fork.
+The fork fully supports a setup like this through the added Single User Mode feature.
+This lets me spin up my customized vibe-kanban with one command to work on my own projects,
+backed by a self-hosted remote server.
+
+### CI/CD setup:
+
+* On push to this fork repository, CI/CD is triggered via `trigger-fork-deploy` GitHub workflow.
+* The build & deploy workflow in my private Git repository is triggered to publish the backend Docker image.
+* The remote server Docker image is deployed to my private server via CI/CD or with a local direct-deployment script.
+
+### Remote server setup:
+
+* Hosted on a Ubuntu server.
+* Runs on Docker Compose with image sourced from the private Git repository.
+* Runs in vibe-kanban Single User Mode (feature added by this fork) and listens to localhost.
+* Uses a reverse proxy with HTTPS and Basic Auth for security independent to vibe-kanban's authentication.
+
+### Frontend setup:
+
+* A local script conveniently runs the frontend binary, pointing it to the deployed remote server.
+* A user-scope systemctl service runs the above local script as a background process.
+* A custom bash script controls the service.
+  I can simply type the `kanban` command to start my vibe-kanban local server.
 
 ## Long-term goal of the fork
 
