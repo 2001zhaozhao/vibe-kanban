@@ -34,6 +34,32 @@ function createFilteredLogger() {
   return logger;
 }
 
+function remoteApiPreconnectPlugin(): Plugin {
+  return {
+    name: 'remote-api-preconnect',
+    transformIndexHtml(html) {
+      const raw = process.env.VITE_VK_SHARED_API_BASE;
+      if (!raw) return html;
+
+      let origin: string;
+      try {
+        // Strip any embedded credentials before extracting the origin
+        const parsed = new URL(raw);
+        parsed.username = '';
+        parsed.password = '';
+        origin = parsed.origin;
+      } catch {
+        return html;
+      }
+
+      if (!origin || origin === 'null') return html;
+
+      const tag = `<link rel="preconnect" href="${origin}" />`;
+      return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    ${tag}`);
+    },
+  };
+}
+
 function executorSchemasPlugin(): Plugin {
   const VIRTUAL_ID = 'virtual:executor-schemas';
   const RESOLVED_VIRTUAL_ID = '\0' + VIRTUAL_ID;
@@ -105,6 +131,7 @@ export default defineConfig({
       },
     }),
     sentryVitePlugin({ org: 'bloop-ai', project: 'vibe-kanban' }),
+    remoteApiPreconnectPlugin(),
     executorSchemasPlugin(),
   ],
   resolve: {

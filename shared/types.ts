@@ -494,27 +494,27 @@ export type McpConfig = { servers: { [key in string]?: JsonValue }, servers_path
 
 export type ExecutorActionType = { "type": "CodingAgentInitialRequest" } & CodingAgentInitialRequest | { "type": "CodingAgentFollowUpRequest" } & CodingAgentFollowUpRequest | { "type": "ScriptRequest" } & ScriptRequest | { "type": "ReviewRequest" } & ReviewRequest;
 
-export type ExecutorConfig = {
+export type ExecutorConfig = { 
 /**
  * The executor type (e.g., CLAUDE_CODE, AMP)
  */
-executor: BaseCodingAgent,
+executor: BaseCodingAgent, 
 /**
  * Optional variant/preset name (e.g., "PLAN", "ROUTER")
  */
-variant?: string | null,
+variant?: string | null, 
 /**
  * Model override (e.g., "anthropic/claude-sonnet-4-20250514")
  */
-model_id?: string | null,
+model_id?: string | null, 
 /**
  * Agent mode override
  */
-agent_id?: string | null,
+agent_id?: string | null, 
 /**
  * Reasoning effort override (e.g., "high", "medium")
  */
-reasoning_id?: string | null,
+reasoning_id?: string | null, 
 /**
  * Permission policy override
  */
@@ -563,11 +563,11 @@ executor: BaseCodingAgent,
  */
 variant: string | null, };
 
-export type ExecutorRecentModels = {
+export type ExecutorRecentModels = { 
 /**
  * Ordered list of recently used model keys (most recent last).
  */
-models?: Array<string>,
+models?: Array<string>, 
 /**
  * Last-used reasoning effort per model
  */
@@ -625,7 +625,7 @@ export type CodingAgentInitialRequest = { prompt: string,
 /**
  * Unified executor identity + overrides
  */
-executor_config: ExecutorConfig,
+executor_config: ExecutorConfig, 
 /**
  * Optional relative path to execute the agent in (relative to container_ref).
  * If None, uses the container_ref directory directly.
@@ -636,18 +636,18 @@ export type CodingAgentFollowUpRequest = { prompt: string, session_id: string, r
 /**
  * Unified executor identity + overrides
  */
-executor_config: ExecutorConfig,
+executor_config: ExecutorConfig, 
 /**
  * Optional relative path to execute the agent in (relative to container_ref).
  * If None, uses the container_ref directory directly.
  */
 working_dir: string | null, };
 
-export type ReviewRequest = {
+export type ReviewRequest = { 
 /**
  * Unified executor identity + overrides
  */
-executor_config: ExecutorConfig, context: Array<RepoReviewContext> | null, prompt: string,
+executor_config: ExecutorConfig, context: Array<RepoReviewContext> | null, prompt: string, 
 /**
  * Optional session ID to resume an existing session
  */
@@ -699,19 +699,19 @@ export type ToolStatus = { "status": "created" } | { "status": "success" } | { "
 
 export type PatchType = { "type": "NORMALIZED_ENTRY", "content": NormalizedEntry } | { "type": "STDOUT", "content": string } | { "type": "STDERR", "content": string } | { "type": "DIFF", "content": Diff };
 
-export type ModelInfo = {
+export type ModelInfo = { 
 /**
  * Model identifier
  */
-id: string,
+id: string, 
 /**
  * Display name
  */
-name: string,
+name: string, 
 /**
  * Provider this model belongs to
  */
-provider_id?: string | null,
+provider_id?: string | null, 
 /**
  * Configurable reasoning options if supported
  */
@@ -719,11 +719,11 @@ reasoning_options: Array<ReasoningOption>, };
 
 export type ReasoningOption = { id: string, label: string, is_default: boolean, };
 
-export type ModelProvider = {
+export type ModelProvider = { 
 /**
  * Provider identifier
  */
-id: string,
+id: string, 
 /**
  * Display name
  */
@@ -733,23 +733,23 @@ export type AgentInfo = { id: string, label: string, description?: string | null
 
 export enum PermissionPolicy { AUTO = "AUTO", SUPERVISED = "SUPERVISED", PLAN = "PLAN" }
 
-export type ModelSelectorConfig = {
+export type ModelSelectorConfig = { 
 /**
  * Available providers
  */
-providers: Array<ModelProvider>,
+providers: Array<ModelProvider>, 
 /**
  * Available models
  */
-models: Array<ModelInfo>,
+models: Array<ModelInfo>, 
 /**
  * Global default model (format: provider_id/model_id)
  */
-default_model?: string | null,
+default_model?: string | null, 
 /**
  * Available agents
  */
-agents: Array<AgentInfo>,
+agents: Array<AgentInfo>, 
 /**
  * Supported permission policies
  */

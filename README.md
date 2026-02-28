@@ -44,6 +44,11 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
 * Added the ability to archive workspaces in the kanban board issue-linked workspace dropdown.
   This saves several clicks every time you are done with a task but did not merge into the main branch
   (e.g. for exploration tasks or tasks you decide to abandon).
+* When using the feature to automatically resolve Git rebase conflicts, if the coding agent is currently in Plan mode,
+  it will send the command in non-Plan mode instead. This avoids the agent creating an unnecessary plan to implement
+  a simple rebase.
+* Added a preconnect hint to the remote server's URL from the frontend to improve performance, and upgrade the
+  connection to HTTP 2 sooner to resolve ElectricSQL shape loading issues on initial load.
 
 ## TLS Setup Guide
 
