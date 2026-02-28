@@ -49,6 +49,14 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   a simple rebase.
 * Added a preconnect hint to the remote server's URL from the frontend to improve performance, and upgrade the
   connection to HTTP 2 sooner to resolve ElectricSQL shape loading issues on initial load.
+* When accepting a plan in Claude Code ExitPlanMode, the UI will now automatically switch to Edit mode instead of
+  remaining in Plan mode. This lets you send follow-up prompts without the agent switching back to plan mode.
+* Added a new button when exiting the Claude Code Plan Mode to implement in a new workspace,
+  similar to the "Clear Context and Implement" feature in Claude Code CLI which technically does the same thing.
+  The button will create a new Workspace with a new agent being fed the plan as its prompt, switch to the current
+  window to the new agent, and archive the existing workspace.
+  This is analogous to how the same feature in the Claude Code CLI behaves, except it also creates a new Git worktree
+  for the workspace due to how vibe-kanban works.
 
 ## TLS Setup Guide
 
