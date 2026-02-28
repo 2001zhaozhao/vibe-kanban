@@ -8,6 +8,7 @@ import {
   type Session,
   type BaseCodingAgent,
   ExecutionProcessStatus,
+  PermissionPolicy,
 } from 'shared/types';
 import { AgentIcon } from '@/shared/components/AgentIcon';
 import { useAttemptExecution } from '@/shared/hooks/useAttemptExecution';
@@ -746,6 +747,11 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         executionProcessId: pendingApproval.executionProcessId,
       });
 
+      // Switch from Plan mode to Edit (Auto) mode after accepting the plan
+      if (executorConfig?.permission_policy === PermissionPolicy.PLAN) {
+        setExecutorOverrides({ permission_policy: PermissionPolicy.AUTO });
+      }
+
       // Invalidate workspace summary cache to update sidebar
       queryClient.invalidateQueries({ queryKey: workspaceSummaryKeys.all });
       onScrollToBottom();
@@ -756,6 +762,8 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     pendingApproval,
     feedbackContext,
     approveAsync,
+    executorConfig,
+    setExecutorOverrides,
     queryClient,
     onScrollToBottom,
   ]);
