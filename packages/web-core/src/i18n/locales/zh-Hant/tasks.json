@@ -658,6 +658,7 @@
       "cancelQueue": "取消佇列",
       "requestChanges": "請求變更",
       "approve": "核准",
+      "forkNewWorkspace": "Fork New Workspace",
       "clearReviewComments": "清除審查評論",
       "edit": "編輯訊息",
       "scrollToPreviousMessage": "Go to previous message",

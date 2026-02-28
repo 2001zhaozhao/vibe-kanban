@@ -658,6 +658,7 @@
       "cancelQueue": "キューをキャンセル",
       "requestChanges": "変更を依頼",
       "approve": "承認",
+      "forkNewWorkspace": "Fork New Workspace",
       "clearReviewComments": "レビューコメントをクリア",
       "edit": "メッセージを編集",
       "scrollToPreviousMessage": "Go to previous message",

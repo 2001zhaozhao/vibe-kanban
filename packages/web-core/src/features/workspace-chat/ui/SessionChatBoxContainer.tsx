@@ -101,6 +101,8 @@ interface SharedProps {
   disableViewCode: boolean;
   /** Replace diff stats with an "Open Workspace" button in header */
   showOpenWorkspaceButton: boolean;
+  /** Called when user clicks "Clear Context and Accept" on a plan approval. Receives the plan text. */
+  onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
 }
 
 /** Props for existing session mode */
@@ -144,6 +146,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     onScrollToBottom,
     disableViewCode = false,
     showOpenWorkspaceButton,
+    onClearContextAndAcceptPlan,
   } = props;
 
   // Extract mode-specific values
@@ -799,6 +802,25 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     onScrollToBottom,
   ]);
 
+  // Handle "Clear Context and Accept" - extracts plan text from entries and delegates to parent
+  const handleClearContextAndAccept = useCallback(async () => {
+    if (!onClearContextAndAcceptPlan) return;
+    // Find the most recent plan_presentation entry to use as the prompt
+    let planText = '';
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (
+        entry.type === 'NORMALIZED_ENTRY' &&
+        entry.content.entry_type.type === 'tool_use' &&
+        entry.content.entry_type.action_type.action === 'plan_presentation'
+      ) {
+        planText = entry.content.entry_type.action_type.plan;
+        break;
+      }
+    }
+    await onClearContextAndAcceptPlan(planText);
+  }, [onClearContextAndAcceptPlan, entries]);
+
   // Handle AskUserQuestion answer submission
   const handleAnswerQuestion = useCallback(
     async (answers: Array<{ question: string; answer: string[] }>) => {
@@ -1032,6 +1054,9 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
               isActive: true,
               onApprove: handleApprove,
               onRequestChanges: handleRequestChanges,
+              onClearContextAndAccept: onClearContextAndAcceptPlan
+                ? handleClearContextAndAccept
+                : undefined,
               isSubmitting: isApproving || isDenying,
               isTimedOut: isApprovalTimedOut,
               error: denyError?.message ?? null,

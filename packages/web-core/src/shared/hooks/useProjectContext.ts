@@ -133,3 +133,7 @@ export function useProjectContext(): ProjectContextValue {
   }
   return context;
 }
+
+export function useProjectContextOptional(): ProjectContextValue | null {
+  return useContext(ProjectContext);
+}

@@ -658,6 +658,7 @@
       "cancelQueue": "取消队列",
       "requestChanges": "请求更改",
       "approve": "批准",
+      "forkNewWorkspace": "Fork New Workspace",
       "clearReviewComments": "清除审查评论",
       "edit": "编辑消息",
       "scrollToPreviousMessage": "Go to previous message",

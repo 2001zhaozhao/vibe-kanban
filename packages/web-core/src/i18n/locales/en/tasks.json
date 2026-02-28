@@ -282,6 +282,7 @@
       "cancelQueue": "Cancel Queue",
       "requestChanges": "Request Changes",
       "approve": "Approve",
+      "forkNewWorkspace": "Fork New Workspace",
       "clearReviewComments": "Clear review comments",
       "edit": "Edit message",
       "scrollToPreviousMessage": "Go to previous message",

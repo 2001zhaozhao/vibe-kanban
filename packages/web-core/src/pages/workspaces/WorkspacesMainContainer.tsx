@@ -35,6 +35,8 @@ interface WorkspacesMainContainerProps {
   isNewSessionMode: boolean;
   /** Callback to start new session mode */
   onStartNewSession: () => void;
+  /** Called when user clicks "Clear Context and Accept" on a plan approval */
+  onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
 }
 
 export const WorkspacesMainContainer = forwardRef<
@@ -49,6 +51,7 @@ export const WorkspacesMainContainer = forwardRef<
     isLoading,
     isNewSessionMode,
     onStartNewSession,
+    onClearContextAndAcceptPlan,
   },
   ref
 ) {
@@ -120,6 +123,7 @@ export const WorkspacesMainContainer = forwardRef<
       showOpenWorkspaceButton={false}
       onScrollToPreviousMessage={handleScrollToPreviousMessage}
       onScrollToBottom={handleScrollToBottom}
+      onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
     />
   );
 

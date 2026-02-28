@@ -658,6 +658,7 @@
       "cancelQueue": "Cancelar cola",
       "requestChanges": "Solicitar cambios",
       "approve": "Aprobar",
+      "forkNewWorkspace": "Fork New Workspace",
       "clearReviewComments": "Limpiar comentarios de revisión",
       "edit": "Editar mensaje",
       "scrollToPreviousMessage": "Go to previous message",

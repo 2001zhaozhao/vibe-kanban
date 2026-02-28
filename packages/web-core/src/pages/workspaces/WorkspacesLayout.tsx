@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 import { Group, Layout, Panel, Separator } from 'react-resizable-panels';
@@ -7,6 +7,11 @@ import { usePageTitle } from '@/shared/hooks/usePageTitle';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
 import { useMobileActiveTab } from '@/shared/stores/useUiPreferencesStore';
 import { cn } from '@/shared/lib/utils';
+import { attemptsApi } from '@/shared/lib/api';
+import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
+import { useProjectContextOptional } from '@/shared/hooks/useProjectContext';
+import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
+import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
 import { ExecutionProcessesProvider } from '@/shared/providers/ExecutionProcessesProvider';
 import { CreateModeProvider } from '@/integrations/CreateModeProvider';
 import { ReviewProvider } from '@/shared/hooks/ReviewProvider';
@@ -53,6 +58,70 @@ export function WorkspacesLayout() {
   const { t } = useTranslation('common');
   usePageTitle(
     isCreateMode ? t('workspaces.newWorkspace') : selectedWorkspace?.name
+  );
+
+  // Linked issue from remote project context (only available in kanban route)
+  const projectCtx = useProjectContextOptional();
+  const linkedIssueForWorkspace = useMemo(() => {
+    if (!projectCtx || !workspaceId) return null;
+    const remoteWorkspace = projectCtx.workspaces.find(
+      (w) => w.local_workspace_id === workspaceId
+    );
+    if (!remoteWorkspace?.issue_id) return null;
+    return {
+      remoteProjectId: projectCtx.projectId,
+      issueId: remoteWorkspace.issue_id,
+    };
+  }, [projectCtx, workspaceId]);
+
+  // Get execution processes for executor config detection
+  const { executionProcesses } = useExecutionProcesses(selectedSession?.id);
+  const latestExecutorConfig = useMemo(
+    () => getLatestConfigFromProcesses(executionProcesses),
+    [executionProcesses]
+  );
+
+  const handleClearContextAndAcceptPlan = useCallback(
+    async (planText: string) => {
+      if (!workspaceId || !repos.length) return;
+
+      const prompt = planText
+        ? `Implement the following plan that was approved by the user:\n\n${planText}`
+        : 'Continue implementing the approved plan.';
+
+      const newWorkspace = await attemptsApi.createAndStart({
+        name: null,
+        repos: repos.map((r) => ({
+          repo_id: r.id,
+          target_branch: r.target_branch,
+        })),
+        linked_issue: linkedIssueForWorkspace
+          ? {
+              remote_project_id: linkedIssueForWorkspace.remoteProjectId,
+              issue_id: linkedIssueForWorkspace.issueId,
+            }
+          : null,
+        executor_config: {
+          ...(latestExecutorConfig ?? {
+            executor: BaseCodingAgent.CLAUDE_CODE,
+          }),
+          permission_policy: PermissionPolicy.AUTO,
+        },
+        prompt,
+        image_ids: null,
+      });
+
+      await attemptsApi.update(workspaceId, { archived: true });
+
+      navigate(toWorkspace(newWorkspace.workspace.id));
+    },
+    [
+      workspaceId,
+      repos,
+      linkedIssueForWorkspace,
+      latestExecutorConfig,
+      navigate,
+    ]
   );
 
   const isMobile = useIsMobile();
@@ -175,6 +244,7 @@ export function WorkspacesLayout() {
                   isLoading={isLoading}
                   isNewSessionMode={isNewSessionMode}
                   onStartNewSession={startNewSession}
+                  onClearContextAndAcceptPlan={handleClearContextAndAcceptPlan}
                 />
               )}
             </div>
@@ -287,6 +357,9 @@ export function WorkspacesLayout() {
                     isLoading={isLoading}
                     isNewSessionMode={isNewSessionMode}
                     onStartNewSession={startNewSession}
+                    onClearContextAndAcceptPlan={
+                      handleClearContextAndAcceptPlan
+                    }
                   />
                 )}
               </Panel>

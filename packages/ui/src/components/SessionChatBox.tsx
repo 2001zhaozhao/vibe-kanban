@@ -108,6 +108,7 @@ interface ApprovalModeProps {
   isActive: boolean;
   onApprove: () => void;
   onRequestChanges: () => void;
+  onClearContextAndAccept?: () => void;
   isSubmitting: boolean;
   isTimedOut: boolean;
   error?: string | null;
@@ -438,12 +439,23 @@ export function SessionChatBox<TExecutor extends string = string>({
               value={t('conversation.actions.requestChanges')}
             />
           ) : (
-            <PrimaryButton
-              onClick={approvalMode?.onApprove}
-              disabled={approvalMode?.isSubmitting}
-              actionIcon={approvalMode?.isSubmitting ? 'spinner' : undefined}
-              value={t('conversation.actions.approve')}
-            />
+            <>
+              {approvalMode?.onClearContextAndAccept && (
+                <PrimaryButton
+                  variant="secondary"
+                  onClick={approvalMode.onClearContextAndAccept}
+                  disabled={approvalMode?.isSubmitting}
+                  actionIcon={approvalMode?.isSubmitting ? 'spinner' : undefined}
+                  value={t('conversation.actions.forkNewWorkspace')}
+                />
+              )}
+              <PrimaryButton
+                onClick={approvalMode?.onApprove}
+                disabled={approvalMode?.isSubmitting}
+                actionIcon={approvalMode?.isSubmitting ? 'spinner' : undefined}
+                value={t('conversation.actions.approve')}
+              />
+            </>
           )}
         </>
       );

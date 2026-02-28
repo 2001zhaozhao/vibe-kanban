@@ -20,6 +20,11 @@ import { CreateModeProvider } from '@/integrations/CreateModeProvider';
 import { useWorkspaceSessions } from '@/shared/hooks/useWorkspaceSessions';
 import { useAttempt } from '@/shared/hooks/useAttempt';
 import { useKanbanNavigation } from '@/shared/hooks/useKanbanNavigation';
+import { attemptsApi } from '@/shared/lib/api';
+import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
+import { useAttemptRepo } from '@/shared/hooks/useAttemptRepo';
+import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
+import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
 import { SessionChatBoxContainer } from '@/features/workspace-chat/ui/SessionChatBoxContainer';
 import { CreateChatBoxContainer } from '@/shared/components/CreateChatBoxContainer';
 import { KanbanIssuePanelContainer } from './KanbanIssuePanelContainer';
@@ -136,7 +141,11 @@ function WorkspaceSessionPanel({
   onClose,
 }: WorkspaceSessionPanelProps) {
   const navigate = useNavigate();
-  const { issueId: routeIssueId, openIssue } = useKanbanNavigation();
+  const {
+    issueId: routeIssueId,
+    openIssue,
+    openIssueWorkspace,
+  } = useKanbanNavigation();
   const { projectId, getIssue } = useProjectContext();
   const { workspaces: remoteWorkspaces } = useUserContext();
   const { activeWorkspaces, archivedWorkspaces } = useWorkspaceContext();
@@ -214,6 +223,64 @@ function WorkspaceSessionPanel({
   const handleAtBottomChange = useCallback((atBottom: boolean) => {
     setIsAtBottom(atBottom);
   }, []);
+
+  // Repos and executor config for "Clear Context and Accept"
+  const { repos } = useAttemptRepo(workspaceId);
+  const { executionProcesses } = useExecutionProcesses(selectedSessionId);
+  const latestExecutorConfig = useMemo(
+    () => getLatestConfigFromProcesses(executionProcesses),
+    [executionProcesses]
+  );
+
+  const handleClearContextAndAcceptPlan = useCallback(
+    async (planText: string) => {
+      if (!workspaceId || !repos.length) return;
+
+      const prompt = planText
+        ? `Implement the following plan that was approved by the user:\n\n${planText}`
+        : 'Continue implementing the approved plan.';
+
+      const newWorkspace = await attemptsApi.createAndStart({
+        name: null,
+        repos: repos.map((r) => ({
+          repo_id: r.id,
+          target_branch: r.target_branch,
+        })),
+        linked_issue:
+          linkedIssueId && projectId
+            ? {
+                remote_project_id: projectId,
+                issue_id: linkedIssueId,
+              }
+            : null,
+        executor_config: {
+          ...(latestExecutorConfig ?? {
+            executor: BaseCodingAgent.CLAUDE_CODE,
+          }),
+          permission_policy: PermissionPolicy.AUTO,
+        },
+        prompt,
+        image_ids: null,
+      });
+
+      await attemptsApi.update(workspaceId, { archived: true });
+
+      if (linkedIssueId) {
+        openIssueWorkspace(linkedIssueId, newWorkspace.workspace.id);
+      } else {
+        navigate(toWorkspace(newWorkspace.workspace.id));
+      }
+    },
+    [
+      workspaceId,
+      repos,
+      linkedIssueId,
+      projectId,
+      latestExecutorConfig,
+      openIssueWorkspace,
+      navigate,
+    ]
+  );
 
   return (
     <ExecutionProcessesProvider
@@ -327,6 +394,7 @@ function WorkspaceSessionPanel({
                   showOpenWorkspaceButton
                   onScrollToPreviousMessage={handleScrollToPreviousMessage}
                   onScrollToBottom={handleScrollToBottom}
+                  onClearContextAndAcceptPlan={handleClearContextAndAcceptPlan}
                 />
               </div>
             </div>
