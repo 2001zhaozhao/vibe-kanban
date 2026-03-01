@@ -229,6 +229,25 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     return null;
   }, [processes, getPendingForProcess, entries]);
 
+  // Check if the current pending approval is specifically for a plan_presentation (ExitPlanMode)
+  const isPlanPresentationPendingApproval = useMemo(() => {
+    if (!pendingApproval) return false;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (entry.type !== 'NORMALIZED_ENTRY') continue;
+      const entryType = entry.content.entry_type;
+      if (
+        entryType.type === 'tool_use' &&
+        entryType.status.status === 'pending_approval' &&
+        entryType.status.approval_id === pendingApproval.approvalId &&
+        entryType.action_type.action === 'plan_presentation'
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }, [pendingApproval, entries]);
+
   // Use approval_id as scratch key when pending approval exists to avoid
   // prefilling approval response with queued follow-up message
   const scratchId = useMemo(() => {
@@ -1054,9 +1073,10 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
               isActive: true,
               onApprove: handleApprove,
               onRequestChanges: handleRequestChanges,
-              onClearContextAndAccept: onClearContextAndAcceptPlan
-                ? handleClearContextAndAccept
-                : undefined,
+              onClearContextAndAccept:
+                onClearContextAndAcceptPlan && isPlanPresentationPendingApproval
+                  ? handleClearContextAndAccept
+                  : undefined,
               isSubmitting: isApproving || isDenying,
               isTimedOut: isApprovalTimedOut,
               error: denyError?.message ?? null,
