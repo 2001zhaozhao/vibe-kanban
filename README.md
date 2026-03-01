@@ -39,7 +39,7 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   full-screen workspace view. Left click still shows a preview of the workspace just like before.
 * Fixed a bug where agent logs from one workspace appears to show up in another workspace if directly switching between
   workspace previews in the Kanban page.
-* When pasting multi-text into the title of a new issue in the kanban board,
+* When pasting multi-line text into the title of a new issue in the kanban board,
   any additional lines will overflow into the description.
 * Added the ability to archive workspaces in the kanban board issue-linked workspace dropdown.
   This saves several clicks every time you are done with a task but did not merge into the main branch
