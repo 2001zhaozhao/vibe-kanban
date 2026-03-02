@@ -354,17 +354,25 @@ function createElectricShapeOptions(args: {
     params: args.params,
     headers: {
       Authorization: async () => {
-        // When the remote API URL had embedded credentials (user:pass@host),
-        // use Basic auth so the reverse proxy can authenticate the request.
+        // Prefer Bearer JWT when available; fall back to Basic auth extracted
+        // from the API base URL (for single-user mode + Basic-auth proxy deployments).
+        let token: string | null = null;
+        try {
+          token = await authRuntime.getToken();
+        } catch {
+          if (!basicAuth) {
+            isPaused = true;
+            return '';
+          }
+        }
+        if (token) {
+          return `Bearer ${token}`;
+        }
         if (basicAuth) {
           return `Basic ${basicAuth}`;
         }
-        const token = await authRuntime.getToken();
-        if (!token) {
-          isPaused = true;
-          return '';
-        }
-        return `Bearer ${token}`;
+        isPaused = true;
+        return '';
       },
     },
     parser: {

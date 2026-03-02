@@ -109,7 +109,14 @@ async function makeAuthenticatedRequest(
 ): Promise<Response> {
   const basicAuth = getRemoteApiBasicAuth();
   const authRuntime = getAuthRuntime();
-  const token = await authRuntime.getToken();
+  // getToken() may throw when no token exists; treat that as "no token" so we
+  // can fall back to Basic auth when credentials are embedded in the API base URL.
+  let token: string | null = null;
+  try {
+    token = await authRuntime.getToken();
+  } catch (err) {
+    if (!basicAuth) throw err;
+  }
   if (!token && !basicAuth) {
     throw new Error('Not authenticated');
   }
@@ -119,20 +126,26 @@ async function makeAuthenticatedRequest(
     headers.set('Content-Type', 'application/json');
   }
 
-  // When the remote API URL had embedded credentials (user:pass@host), use Basic auth
-  // so the reverse proxy can authenticate the request. The backend in single-user mode
-  // skips JWT validation, so this is safe.
-  if (basicAuth) {
-    headers.set('Authorization', `Basic ${basicAuth}`);
-  } else if (token) {
+  // Prefer Bearer JWT when a token is available — covers both regular OAuth and
+  // single-user-mode deployments that have already performed a login handshake.
+  // When no token exists (e.g. single-user mode accessed purely via a Basic-auth
+  // reverse proxy with no separate login step), fall back to the extracted Basic
+  // credentials so the proxy layer can authenticate the request.
+  if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  } else if (basicAuth) {
+    headers.set('Authorization', `Basic ${basicAuth}`);
   }
   headers.set('X-Client-Version', __APP_VERSION__);
   headers.set('X-Client-Type', 'frontend');
 
-  // When proxy Basic auth is active, the server uses Access-Control-Allow-Origin: *
-  // (wildcard), which the browser only permits without credentials: 'include'.
-  const credentialsMode: RequestCredentials = basicAuth ? 'omit' : 'include';
+  // When proxy Basic auth is active (and we have no JWT), the server uses
+  // Access-Control-Allow-Origin: * (wildcard), which the browser only permits
+  // without credentials: 'include'.
+  const usingBasicFallback = !token && !!basicAuth;
+  const credentialsMode: RequestCredentials = usingBasicFallback
+    ? 'omit'
+    : 'include';
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
@@ -140,8 +153,8 @@ async function makeAuthenticatedRequest(
     credentials: credentialsMode,
   });
 
-  // Handle 401 - token may have expired (only relevant without proxy basic auth)
-  if (response.status === 401 && retryOn401 && !basicAuth) {
+  // Handle 401 - token may have expired (only relevant when using Bearer JWT)
+  if (response.status === 401 && retryOn401 && !usingBasicFallback) {
     const newToken = await authRuntime.triggerRefresh();
     if (newToken) {
       // Retry the request with the new token
