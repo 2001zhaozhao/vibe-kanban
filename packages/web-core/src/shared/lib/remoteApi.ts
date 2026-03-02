@@ -126,26 +126,24 @@ async function makeAuthenticatedRequest(
     headers.set('Content-Type', 'application/json');
   }
 
-  // Prefer Bearer JWT when a token is available — covers both regular OAuth and
-  // single-user-mode deployments that have already performed a login handshake.
-  // When no token exists (e.g. single-user mode accessed purely via a Basic-auth
-  // reverse proxy with no separate login step), fall back to the extracted Basic
-  // credentials so the proxy layer can authenticate the request.
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  } else if (basicAuth) {
+  // When the API base URL contains embedded credentials, always send Basic auth
+  // so the reverse proxy can authenticate every request. Fall back to Bearer
+  // JWT only when no proxy credentials are configured.
+  if (basicAuth) {
     headers.set('Authorization', `Basic ${basicAuth}`);
+  } else if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
   headers.set('X-Client-Version', __APP_VERSION__);
   headers.set('X-Client-Type', 'frontend');
 
-  // When proxy Basic auth is active (and we have no JWT), the server uses
-  // Access-Control-Allow-Origin: * (wildcard), which the browser only permits
-  // without credentials: 'include'.
-  const usingBasicFallback = !token && !!basicAuth;
-  const credentialsMode: RequestCredentials = usingBasicFallback
-    ? 'omit'
-    : 'include';
+  // When proxy Basic auth is configured, always use 'omit' regardless of
+  // whether a JWT token is also available. Basic-auth reverse-proxy servers
+  // may respond with Access-Control-Allow-Origin: * (wildcard), which the
+  // browser only permits without credentials: 'include'.
+  const credentialsMode: RequestCredentials = basicAuth ? 'omit' : 'include';
+  // Skip the 401-retry path when using Basic auth — proxy credentials don't expire.
+  const usingBasicFallback = !!basicAuth;
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,

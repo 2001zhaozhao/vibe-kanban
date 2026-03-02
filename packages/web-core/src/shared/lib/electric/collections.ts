@@ -354,25 +354,22 @@ function createElectricShapeOptions(args: {
     params: args.params,
     headers: {
       Authorization: async () => {
-        // Prefer Bearer JWT when available; fall back to Basic auth extracted
-        // from the API base URL (for single-user mode + Basic-auth proxy deployments).
-        let token: string | null = null;
-        try {
-          token = await authRuntime.getToken();
-        } catch {
-          if (!basicAuth) {
-            isPaused = true;
-            return '';
-          }
-        }
-        if (token) {
-          return `Bearer ${token}`;
-        }
+        // When the API base URL contains embedded credentials, always send
+        // Basic auth so the reverse proxy authenticates the request.
         if (basicAuth) {
           return `Basic ${basicAuth}`;
         }
-        isPaused = true;
-        return '';
+        try {
+          const token = await authRuntime.getToken();
+          if (!token) {
+            isPaused = true;
+            return '';
+          }
+          return `Bearer ${token}`;
+        } catch {
+          isPaused = true;
+          return '';
+        }
       },
     },
     parser: {
