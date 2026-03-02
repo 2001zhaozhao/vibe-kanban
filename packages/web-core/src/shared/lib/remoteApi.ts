@@ -16,34 +16,82 @@ import type {
 import { getAuthRuntime } from '@/shared/lib/auth/runtime';
 import { syncRelayApiBaseWithRemote } from '@/shared/lib/relayBackendApi';
 
-const BUILD_TIME_API_BASE = import.meta.env.VITE_VK_SHARED_API_BASE || '';
+/**
+ * Parse a URL string and extract any embedded credentials (user:pass@host).
+ * Returns the cleaned URL (without credentials) and a Basic auth string if present.
+ *
+ * Browsers reject fetch() calls with credentials embedded in the URL, so deployments
+ * that use HTTP Basic Auth (e.g. via a reverse proxy) must encode them as a header instead.
+ */
+function parseUrlCredentials(raw: string): {
+  url: string;
+  basicAuth: string | null;
+} {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.username || parsed.password) {
+      const basicAuth = btoa(
+        `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`
+      );
+      parsed.username = '';
+      parsed.password = '';
+      const result = parsed.toString();
+      // URL.toString() adds a trailing slash for bare origins; preserve original
+      return {
+        url: !raw.endsWith('/') ? result.replace(/\/$/, '') : result,
+        basicAuth,
+      };
+    }
+  } catch {
+    // Not a valid absolute URL — return as-is
+  }
+  return { url: raw, basicAuth: null };
+}
 
-// Mutable module-level variable — overridden at runtime by ConfigProvider
+const BUILD_TIME_API_BASE = import.meta.env.VITE_VK_SHARED_API_BASE || '';
+const buildTimeParsed = parseUrlCredentials(BUILD_TIME_API_BASE);
+
+// Mutable module-level variables — overridden at runtime by ConfigProvider
 // when VK_SHARED_API_BASE is set (for self-hosting support)
-let _remoteApiBase: string = BUILD_TIME_API_BASE;
+let _remoteApiBase: string = buildTimeParsed.url;
+let _remoteApiBasicAuth: string | null = buildTimeParsed.basicAuth;
 
 /**
  * Set the remote API base URL at runtime.
  * Called by ConfigProvider when /api/info returns a shared_api_base value.
  * No-op if base is null/undefined/empty (preserves build-time fallback).
+ *
+ * If the URL contains embedded credentials (e.g. https://user:pass@host),
+ * they are extracted and sent as a Basic Authorization header instead,
+ * because the browser fetch API rejects URLs with embedded credentials.
  */
 export function setRemoteApiBase(base: string | null | undefined) {
   if (base) {
-    _remoteApiBase = base;
-    syncRelayApiBaseWithRemote(base);
+    const parsed = parseUrlCredentials(base);
+    _remoteApiBase = parsed.url;
+    _remoteApiBasicAuth = parsed.basicAuth;
+    syncRelayApiBaseWithRemote(parsed.url);
   }
 }
 
 /**
- * Get the current remote API base URL.
+ * Get the current remote API base URL (credentials stripped).
  * Returns the runtime value if set by ConfigProvider, otherwise the build-time default.
  */
 export function getRemoteApiUrl(): string {
   return _remoteApiBase;
 }
 
+/**
+ * Get the Basic auth string extracted from the remote API base URL, if any.
+ * Returns null when the URL had no embedded credentials.
+ */
+export function getRemoteApiBasicAuth(): string | null {
+  return _remoteApiBasicAuth;
+}
+
 // Backward-compatible export — consumers should migrate to getRemoteApiUrl()
-export const REMOTE_API_URL = BUILD_TIME_API_BASE;
+export const REMOTE_API_URL = buildTimeParsed.url;
 
 export const makeRequest = async (
   path: string,
@@ -59,9 +107,10 @@ async function makeAuthenticatedRequest(
   options: RequestInit = {},
   retryOn401 = true
 ): Promise<Response> {
+  const basicAuth = getRemoteApiBasicAuth();
   const authRuntime = getAuthRuntime();
   const token = await authRuntime.getToken();
-  if (!token) {
+  if (!token && !basicAuth) {
     throw new Error('Not authenticated');
   }
 
@@ -69,18 +118,30 @@ async function makeAuthenticatedRequest(
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  headers.set('Authorization', `Bearer ${token}`);
+
+  // When the remote API URL had embedded credentials (user:pass@host), use Basic auth
+  // so the reverse proxy can authenticate the request. The backend in single-user mode
+  // skips JWT validation, so this is safe.
+  if (basicAuth) {
+    headers.set('Authorization', `Basic ${basicAuth}`);
+  } else if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
   headers.set('X-Client-Version', __APP_VERSION__);
   headers.set('X-Client-Type', 'frontend');
+
+  // When proxy Basic auth is active, the server uses Access-Control-Allow-Origin: *
+  // (wildcard), which the browser only permits without credentials: 'include'.
+  const credentialsMode: RequestCredentials = basicAuth ? 'omit' : 'include';
 
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers,
-    credentials: 'include',
+    credentials: credentialsMode,
   });
 
-  // Handle 401 - token may have expired
-  if (response.status === 401 && retryOn401) {
+  // Handle 401 - token may have expired (only relevant without proxy basic auth)
+  if (response.status === 401 && retryOn401 && !basicAuth) {
     const newToken = await authRuntime.triggerRefresh();
     if (newToken) {
       // Retry the request with the new token
@@ -88,7 +149,7 @@ async function makeAuthenticatedRequest(
       return fetch(`${baseUrl}${path}`, {
         ...options,
         headers,
-        credentials: 'include',
+        credentials: credentialsMode,
       });
     }
     // Refresh failed, throw an auth error

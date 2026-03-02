@@ -21,9 +21,41 @@ const USE_REMOTE_API_BASE_FALLBACK = !BUILD_TIME_RELAY_API_BASE;
 
 let _relayApiBase: string = BUILD_TIME_RELAY_API_BASE || BUILD_TIME_API_BASE;
 
+function parseUrlCredentials(raw: string): {
+  url: string;
+  basicAuth: string | null;
+} {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.username || parsed.password) {
+      const basicAuth = btoa(
+        `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`
+      );
+      parsed.username = '';
+      parsed.password = '';
+      const result = parsed.toString();
+      return {
+        url: !raw.endsWith('/') ? result.replace(/\/$/, '') : result,
+        basicAuth,
+      };
+    }
+  } catch {
+    // Not a valid absolute URL — return as-is
+  }
+  return { url: raw, basicAuth: null };
+}
+
+let _relayApiBasicAuth: string | null = null;
+
+export function getRelayApiBasicAuth(): string | null {
+  return _relayApiBasicAuth;
+}
+
 export function setRelayApiBase(base: string | null | undefined) {
   if (base) {
-    _relayApiBase = base;
+    const parsed = parseUrlCredentials(base);
+    _relayApiBase = parsed.url;
+    _relayApiBasicAuth = parsed.basicAuth;
   }
 }
 
