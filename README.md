@@ -49,6 +49,7 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   a simple rebase.
 * Added a preconnect hint to the remote server's URL from the frontend to improve performance, and upgrade the
   connection to HTTP 2 sooner to resolve ElectricSQL shape loading issues on initial load.
+  Also, the frontend will now delay loading until HTTP/2 has been negotiated with the remote server, or a fixed timeout.
 * When accepting a plan in Claude Code ExitPlanMode, the UI will now automatically switch to Edit mode instead of
   remaining in Plan mode. This lets you send follow-up prompts without the agent switching back to plan mode.
 * Added a new button when exiting the Claude Code Plan Mode to implement in a new workspace,
