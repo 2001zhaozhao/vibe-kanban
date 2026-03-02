@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { IssueSectionContainer } from './IssueSectionContainer';
 import { FileTreeContainer } from './FileTreeContainer';
 import { ProcessListContainer } from './ProcessListContainer';
 import { PreviewControlsContainer } from './PreviewControlsContainer';
@@ -37,12 +38,14 @@ export interface RightSidebarProps {
   rightMainPanelMode: RightMainPanelMode | null;
   selectedWorkspace: Workspace | undefined;
   repos: RepoWithTargetBranch[];
+  linkedIssueForWorkspace?: { remoteProjectId: string; issueId: string } | null;
 }
 
 export function RightSidebar({
   rightMainPanelMode,
   selectedWorkspace,
   repos,
+  linkedIssueForWorkspace,
 }: RightSidebarProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { selectFile } = useChangesView();
@@ -75,6 +78,10 @@ export function RightSidebar({
     PERSIST_KEYS.notesSection,
     false
   );
+  const [issueExpanded] = usePersistedExpanded(
+    PERSIST_KEYS.issueSection,
+    true
+  );
 
   const hasUpperContent =
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES ||
@@ -97,6 +104,18 @@ export function RightSidebar({
 
   function buildWorkspaceSections(): SectionDef[] {
     const result: SectionDef[] = [
+      {
+        title: 'Issue',
+        persistKey: PERSIST_KEYS.issueSection,
+        visible: !!linkedIssueForWorkspace,
+        expanded: issueExpanded,
+        content: (
+          <IssueSectionContainer
+            projectId={linkedIssueForWorkspace?.remoteProjectId}
+          />
+        ),
+        actions: [],
+      },
       {
         title: 'Git',
         persistKey: PERSIST_KEYS.gitPanelRepositories,

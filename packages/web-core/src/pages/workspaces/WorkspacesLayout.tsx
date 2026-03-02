@@ -28,6 +28,7 @@ import { CreateChatBoxContainer } from '@/shared/components/CreateChatBoxContain
 import { PreviewBrowserContainer } from './PreviewBrowserContainer';
 import { WorkspacesGuideDialog } from '@/shared/dialogs/shared/WorkspacesGuideDialog';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
+import { LinkedIssueProvider } from '@/shared/providers/remote/LinkedIssueContext';
 
 import {
   PERSIST_KEYS,
@@ -297,11 +298,17 @@ export function WorkspacesLayout() {
               )}
             >
               {selectedWorkspace && !isCreateMode && (
-                <RightSidebar
-                  rightMainPanelMode={rightMainPanelMode}
-                  selectedWorkspace={selectedWorkspace}
-                  repos={repos}
-                />
+                <LinkedIssueProvider
+                  issueId={linkedIssueForWorkspace?.issueId ?? undefined}
+                  projectId={linkedIssueForWorkspace?.remoteProjectId ?? undefined}
+                >
+                  <RightSidebar
+                    rightMainPanelMode={rightMainPanelMode}
+                    selectedWorkspace={selectedWorkspace}
+                    repos={repos}
+                    linkedIssueForWorkspace={linkedIssueForWorkspace}
+                  />
+                </LinkedIssueProvider>
               )}
             </div>
           </div>
@@ -401,11 +408,17 @@ export function WorkspacesLayout() {
 
           {isRightSidebarVisible && !isCreateMode && (
             <div className="w-[300px] shrink-0 h-full overflow-hidden">
-              <RightSidebar
-                rightMainPanelMode={rightMainPanelMode}
-                selectedWorkspace={selectedWorkspace}
-                repos={repos}
-              />
+              <LinkedIssueProvider
+                issueId={linkedIssueForWorkspace?.issueId ?? undefined}
+                projectId={linkedIssueForWorkspace?.remoteProjectId ?? undefined}
+              >
+                <RightSidebar
+                  rightMainPanelMode={rightMainPanelMode}
+                  selectedWorkspace={selectedWorkspace}
+                  repos={repos}
+                  linkedIssueForWorkspace={linkedIssueForWorkspace}
+                />
+              </LinkedIssueProvider>
             </div>
           )}
         </div>
