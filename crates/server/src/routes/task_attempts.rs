@@ -2006,6 +2006,36 @@ pub async fn create_and_start_workspace(
         WorkspaceImage::associate_many_dedup(pool, workspace.id, ids).await?;
     }
 
+    // Register the new workspace on the remote server, linking it to the issue
+    if let Some(linked_issue) = &linked_issue {
+        if let Ok(client) = deployment.remote_client() {
+            let stats = diff_stream::compute_diff_stats(
+                &deployment.db().pool,
+                deployment.git(),
+                &workspace,
+            )
+            .await;
+            if let Err(e) = client
+                .create_workspace(CreateWorkspaceRequest {
+                    project_id: linked_issue.remote_project_id,
+                    local_workspace_id: workspace.id,
+                    issue_id: linked_issue.issue_id,
+                    name: workspace.name.clone(),
+                    archived: Some(workspace.archived),
+                    files_changed: stats.as_ref().map(|s| s.files_changed as i32),
+                    lines_added: stats.as_ref().map(|s| s.lines_added as i32),
+                    lines_removed: stats.as_ref().map(|s| s.lines_removed as i32),
+                })
+                .await
+            {
+                tracing::warn!(
+                    "Failed to register forked workspace on remote server: {}",
+                    e
+                );
+            }
+        }
+    }
+
     // Import images from linked remote issue so they're available in the workspace
     if let Some(linked_issue) = &linked_issue
         && let Ok(client) = deployment.remote_client()

@@ -47,21 +47,18 @@ configureAuthRuntime({
   },
 });
 
-async function waitForHttp2(
-  apiBase: string,
-  maxWaitMs = 4000,
-): Promise<void> {
+async function waitForHttp2(apiBase: string, maxWaitMs = 4000): Promise<void> {
   const probeUrl = `${apiBase}/v1/health`;
   const deadline = Date.now() + maxWaitMs;
 
   while (Date.now() < deadline) {
     try {
-      await fetch(probeUrl, { method: 'HEAD', cache: 'no-store' });
+      await fetch(probeUrl, { method: "HEAD", cache: "no-store" });
       const entries = performance.getEntriesByName(
         probeUrl,
       ) as PerformanceResourceTiming[];
       const latest = entries[entries.length - 1];
-      if (latest?.nextHopProtocol === 'h2') return;
+      if (latest?.nextHopProtocol === "h2") return;
     } catch {
       // network error, keep trying
     }
@@ -71,11 +68,10 @@ async function waitForHttp2(
 }
 
 (async () => {
-  const apiBase =
-    import.meta.env.VITE_API_BASE_URL || window.location.origin;
+  const apiBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
   await waitForHttp2(apiBase);
 
-  ReactDOM.createRoot(document.getElementById('root')!).render(
+  ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <PostHogProvider client={posthog}>
