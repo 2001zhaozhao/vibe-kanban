@@ -9,7 +9,7 @@ import { useMobileActiveTab } from '@/shared/stores/useUiPreferencesStore';
 import { cn } from '@/shared/lib/utils';
 import { attemptsApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
-import { useProjectContextOptional } from '@/shared/hooks/useProjectContext';
+import { useUserContext } from '@/shared/hooks/useUserContext';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
 import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
 import { ExecutionProcessesProvider } from '@/shared/providers/ExecutionProcessesProvider';
@@ -61,19 +61,19 @@ export function WorkspacesLayout() {
     isCreateMode ? t('workspaces.newWorkspace') : selectedWorkspace?.name
   );
 
-  // Linked issue from remote project context (only available in kanban route)
-  const projectCtx = useProjectContextOptional();
+  // Linked issue from user context (always available, unlike project context)
+  const userCtx = useUserContext();
   const linkedIssueForWorkspace = useMemo(() => {
-    if (!projectCtx || !workspaceId) return null;
-    const remoteWorkspace = projectCtx.workspaces.find(
+    if (!workspaceId || !userCtx?.workspaces) return null;
+    const remoteWorkspace = userCtx.workspaces.find(
       (w) => w.local_workspace_id === workspaceId
     );
     if (!remoteWorkspace?.issue_id) return null;
     return {
-      remoteProjectId: projectCtx.projectId,
+      remoteProjectId: remoteWorkspace.project_id,
       issueId: remoteWorkspace.issue_id,
     };
-  }, [projectCtx, workspaceId]);
+  }, [userCtx, workspaceId]);
 
   // Get execution processes for executor config detection
   const { executionProcesses } = useExecutionProcesses(selectedSession?.id);
