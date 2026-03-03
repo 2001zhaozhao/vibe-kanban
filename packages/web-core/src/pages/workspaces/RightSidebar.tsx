@@ -30,6 +30,7 @@ type SectionDef = {
   persistKey: PersistKey;
   visible: boolean;
   expanded: boolean;
+  collapsible?: boolean;
   content: React.ReactNode;
   actions: SectionAction[];
 };
@@ -78,10 +79,6 @@ export function RightSidebar({
     PERSIST_KEYS.notesSection,
     false
   );
-  const [issueExpanded] = usePersistedExpanded(
-    PERSIST_KEYS.issueSection,
-    true
-  );
 
   const hasUpperContent =
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES ||
@@ -108,7 +105,8 @@ export function RightSidebar({
         title: 'Issue',
         persistKey: PERSIST_KEYS.issueSection,
         visible: !!linkedIssueForWorkspace,
-        expanded: issueExpanded,
+        expanded: true,
+        collapsible: false,
         content: (
           <IssueSectionContainer
             projectId={linkedIssueForWorkspace?.remoteProjectId}
@@ -219,9 +217,16 @@ export function RightSidebar({
                 title={section.title}
                 persistKey={section.persistKey}
                 defaultExpanded={section.expanded}
+                collapsible={section.collapsible ?? true}
                 actions={section.actions}
               >
-                <div className="flex flex-1 border-t min-h-[200px] w-full overflow-auto">
+                <div
+                  className={`flex flex-1 border-t w-full overflow-auto ${
+                    (section.collapsible ?? true)
+                      ? 'min-h-[200px]'
+                      : 'min-h-[1px]'
+                  }`}
+                >
                   {section.content}
                 </div>
               </CollapsibleSectionHeader>
