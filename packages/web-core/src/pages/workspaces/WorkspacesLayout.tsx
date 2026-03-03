@@ -300,7 +300,9 @@ export function WorkspacesLayout() {
               {selectedWorkspace && !isCreateMode && (
                 <LinkedIssueProvider
                   issueId={linkedIssueForWorkspace?.issueId ?? undefined}
-                  projectId={linkedIssueForWorkspace?.remoteProjectId ?? undefined}
+                  projectId={
+                    linkedIssueForWorkspace?.remoteProjectId ?? undefined
+                  }
                 >
                   <RightSidebar
                     rightMainPanelMode={rightMainPanelMode}
@@ -410,7 +412,9 @@ export function WorkspacesLayout() {
             <div className="w-[300px] shrink-0 h-full overflow-hidden">
               <LinkedIssueProvider
                 issueId={linkedIssueForWorkspace?.issueId ?? undefined}
-                projectId={linkedIssueForWorkspace?.remoteProjectId ?? undefined}
+                projectId={
+                  linkedIssueForWorkspace?.remoteProjectId ?? undefined
+                }
               >
                 <RightSidebar
                   rightMainPanelMode={rightMainPanelMode}

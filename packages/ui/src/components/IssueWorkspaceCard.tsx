@@ -52,6 +52,7 @@ export interface IssueWorkspaceCardProps {
   onContextMenu?: () => void;
   onUnlink?: () => void;
   onArchive?: () => void;
+  onUnarchive?: () => void;
   onDelete?: () => void;
   showOwner?: boolean;
   showStatusBadge?: boolean;
@@ -127,6 +128,7 @@ export function IssueWorkspaceCard({
   onContextMenu,
   onUnlink,
   onArchive,
+  onUnarchive,
   onDelete,
   showOwner = true,
   showStatusBadge = true,
@@ -185,7 +187,7 @@ export function IssueWorkspaceCard({
               className="h-5 w-5 text-[10px] border-2 border-panel"
             />
           )}
-          {(onUnlink || onArchive || onDelete) && (
+          {(onUnlink || onArchive || onUnarchive || onDelete) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -220,6 +222,17 @@ export function IssueWorkspaceCard({
                   >
                     <ArchiveIcon className="size-icon-xs" />
                     {t('workspaces.archive')}
+                  </DropdownMenuItem>
+                )}
+                {onUnarchive && workspace.archived && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnarchive();
+                    }}
+                  >
+                    <ArchiveIcon className="size-icon-xs" />
+                    {t('workspaces.unarchive')}
                   </DropdownMenuItem>
                 )}
                 {onDelete && (
