@@ -113,14 +113,14 @@ export function WorkspacesLayout() {
 
       await attemptsApi.update(workspaceId, { archived: true });
 
-      navigate(toWorkspace(newWorkspace.workspace.id));
+      appNavigation.goToWorkspace(newWorkspace.workspace.id);
     },
     [
       workspaceId,
       repos,
       linkedIssueForWorkspace,
       latestExecutorConfig,
-      navigate,
+      appNavigation,
     ]
   );
 

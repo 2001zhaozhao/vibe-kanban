@@ -1,7 +1,6 @@
 import { useMemo, useCallback } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import { useLinkedIssueContext } from '@/shared/providers/remote/LinkedIssueContext';
-import { buildIssuePath } from '@/shared/lib/routes/projectSidebarRoutes';
+import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { IssueSection } from '@vibe/ui/components/IssueSection';
 
 export function IssueSectionContainer({
@@ -10,7 +9,7 @@ export function IssueSectionContainer({
   projectId: string | undefined;
 }) {
   const linkedIssue = useLinkedIssueContext();
-  const navigate = useNavigate();
+  const appNavigation = useAppNavigation();
 
   const statusOptions = useMemo(() => {
     if (!linkedIssue?.statuses) return [];
@@ -29,8 +28,8 @@ export function IssueSectionContainer({
 
   const handleNavigate = useCallback(() => {
     if (!projectId || !linkedIssue?.issue?.id) return;
-    navigate(buildIssuePath(projectId, linkedIssue.issue.id));
-  }, [navigate, projectId, linkedIssue?.issue?.id]);
+    appNavigation.goToProjectIssue(projectId, linkedIssue.issue.id);
+  }, [appNavigation, projectId, linkedIssue?.issue?.id]);
 
   if (!linkedIssue?.issue) {
     return (

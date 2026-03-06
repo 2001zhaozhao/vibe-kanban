@@ -18,7 +18,6 @@ import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/Me
 import { CreateModeProvider } from '@/integrations/CreateModeProvider';
 import { useWorkspaceSessions } from '@/shared/hooks/useWorkspaceSessions';
 import { useAttempt } from '@/shared/hooks/useAttempt';
-import { useKanbanNavigation } from '@/shared/hooks/useKanbanNavigation';
 import { attemptsApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useAttemptRepo } from '@/shared/hooks/useAttemptRepo';
@@ -145,8 +144,7 @@ function WorkspaceSessionPanel({
   workspaceId,
   onClose,
 }: WorkspaceSessionPanelProps) {
-  const navigate = useNavigate();
-  const { issueId: routeIssueId, openIssue } = useKanbanNavigation();
+  const appNavigation = useAppNavigation();
   const { projectId, getIssue } = useProjectContext();
   const routeState = useCurrentKanbanRouteState();
   const { workspaces: remoteWorkspaces } = useUserContext();
@@ -267,10 +265,14 @@ function WorkspaceSessionPanel({
 
       await attemptsApi.update(workspaceId, { archived: true });
 
-      if (linkedIssueId) {
-        openIssueWorkspace(linkedIssueId, newWorkspace.workspace.id);
+      if (linkedIssueId && projectId) {
+        appNavigation.goToProjectIssueWorkspace(
+          projectId,
+          linkedIssueId,
+          newWorkspace.workspace.id
+        );
       } else {
-        navigate(toWorkspace(newWorkspace.workspace.id));
+        appNavigation.goToWorkspace(newWorkspace.workspace.id);
       }
     },
     [
@@ -279,8 +281,7 @@ function WorkspaceSessionPanel({
       linkedIssueId,
       projectId,
       latestExecutorConfig,
-      openIssueWorkspace,
-      navigate,
+      appNavigation,
     ]
   );
 

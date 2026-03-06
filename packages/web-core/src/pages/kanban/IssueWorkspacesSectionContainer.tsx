@@ -1,6 +1,5 @@
 import { useMemo, useCallback } from 'react';
 import { useParams } from '@tanstack/react-router';
-import { toWorkspace } from '@/shared/lib/routes/navigation';
 import { useTranslation } from 'react-i18next';
 import { LinkIcon, PlusIcon } from '@phosphor-icons/react';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
@@ -205,9 +204,9 @@ export function IssueWorkspacesSectionContainer({
   // Handle right-clicking a workspace card to navigate directly to full workspace view
   const handleWorkspaceRightClick = useCallback(
     (localWorkspaceId: string) => {
-      navigate(toWorkspace(localWorkspaceId));
+      appNavigation.goToWorkspace(localWorkspaceId);
     },
-    [navigate]
+    [appNavigation]
   );
 
   // Handle unlinking a workspace from the issue

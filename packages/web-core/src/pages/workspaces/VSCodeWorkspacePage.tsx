@@ -3,7 +3,6 @@ import '@/integrations/vscode/bridge';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from '@tanstack/react-router';
 import { AppWithStyleOverride } from '@/shared/lib/StyleOverride';
 import { useStyleOverrideThemeSetter } from '@/shared/lib/StyleOverride';
 import { WebviewContextMenu } from '@/integrations/vscode/ContextMenu';
@@ -16,7 +15,7 @@ import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useProjectContextOptional } from '@/shared/hooks/useProjectContext';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
 import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
-import { toWorkspace } from '@/shared/lib/routes/navigation';
+import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import {
   ConversationList,
   type ConversationListHandle,
@@ -30,7 +29,7 @@ import { createWorkspaceWithSession } from '@/shared/types/attempt';
 export function VSCodeWorkspacePage() {
   const { t } = useTranslation('common');
   const setTheme = useStyleOverrideThemeSetter();
-  const navigate = useNavigate();
+  const appNavigation = useAppNavigation();
   const conversationListRef = useRef<ConversationListHandle>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
@@ -101,14 +100,14 @@ export function VSCodeWorkspacePage() {
 
       await attemptsApi.update(workspaceId, { archived: true });
 
-      navigate(toWorkspace(newWorkspace.workspace.id));
+      appNavigation.goToWorkspace(newWorkspace.workspace.id);
     },
     [
       workspaceId,
       repos,
       linkedIssueForWorkspace,
       latestExecutorConfig,
-      navigate,
+      appNavigation,
     ]
   );
 

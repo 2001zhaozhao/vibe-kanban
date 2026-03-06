@@ -1,6 +1,5 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from '@tanstack/react-router';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
 import { useOrgContext } from '@/shared/hooks/useOrgContext';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
@@ -64,7 +63,6 @@ import {
 } from '@vibe/ui/components/Dropdown';
 import { SearchableTagDropdownContainer } from '@/shared/components/SearchableTagDropdownContainer';
 import type { IssuePriority } from 'shared/remote-types';
-import { toWorkspace } from '@/shared/lib/routes/navigation';
 
 const areStringSetsEqual = (left: string[], right: string[]): boolean => {
   if (left.length !== right.length) {
@@ -117,7 +115,6 @@ function LoadingState() {
 export function KanbanContainer() {
   const isMobile = useIsMobile();
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
   const appNavigation = useAppNavigation();
   const routeState = useCurrentKanbanRouteState();
 
@@ -1000,16 +997,6 @@ export function KanbanContainer() {
                                             openIssueWorkspace(
                                               issue.id,
                                               workspace.localWorkspaceId!
-                                            )
-                                        : undefined
-                                    }
-                                    onContextMenu={
-                                      workspace.localWorkspaceId
-                                        ? () =>
-                                            navigate(
-                                              toWorkspace(
-                                                workspace.localWorkspaceId!
-                                              )
                                             )
                                         : undefined
                                     }
