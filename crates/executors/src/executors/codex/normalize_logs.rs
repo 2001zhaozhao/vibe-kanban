@@ -6,9 +6,11 @@ use std::{
 };
 
 use codex_app_server_protocol::{
-    JSONRPCNotification, JSONRPCResponse, NewConversationResponse, ServerNotification,
+    JSONRPCNotification, JSONRPCResponse, ServerNotification, ThreadForkResponse,
+    ThreadStartResponse,
 };
 use codex_protocol::{
+    items::TurnItem,
     openai_models::ReasoningEffort,
     plan_tool::{StepStatus, UpdatePlanArgs},
     protocol::{
@@ -16,8 +18,9 @@ use codex_protocol::{
         AgentReasoningSectionBreakEvent, ApplyPatchApprovalRequestEvent, BackgroundEventEvent,
         ErrorEvent, EventMsg, ExecApprovalRequestEvent, ExecCommandBeginEvent, ExecCommandEndEvent,
         ExecCommandOutputDeltaEvent, ExecOutputStream, ExitedReviewModeEvent,
-        FileChange as CodexProtoFileChange, McpInvocation, McpToolCallBeginEvent,
-        McpToolCallEndEvent, PatchApplyBeginEvent, PatchApplyEndEvent, StreamErrorEvent,
+        FileChange as CodexProtoFileChange, ItemCompletedEvent, ItemStartedEvent, McpInvocation,
+        McpToolCallBeginEvent, McpToolCallEndEvent, ModelRerouteEvent, PatchApplyBeginEvent,
+        PatchApplyEndEvent, PlanDeltaEvent, RequestUserInputEvent, StreamErrorEvent,
         ViewImageToolCallEvent, WarningEvent, WebSearchBeginEvent, WebSearchEndEvent,
     },
 };
@@ -26,17 +29,18 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use workspace_utils::{
-    approvals::ApprovalStatus, diff::normalize_unified_diff, msg_store::MsgStore,
+    approvals::{ApprovalStatus, QuestionStatus},
+    diff::normalize_unified_diff,
+    msg_store::MsgStore,
     path::make_path_relative,
 };
 
 use crate::{
     approvals::ToolCallMetadata,
-    executors::codex::session::SessionHandler,
     logs::{
-        ActionType, CommandExitStatus, CommandRunResult, FileChange, NormalizedEntry,
-        NormalizedEntryError, NormalizedEntryType, TodoItem, ToolResult, ToolResultValueType,
-        ToolStatus,
+        ActionType, AnsweredQuestion, AskUserQuestionItem, AskUserQuestionOption,
+        CommandExitStatus, CommandRunResult, FileChange, NormalizedEntry, NormalizedEntryError,
+        NormalizedEntryType, TodoItem, ToolResult, ToolResultValueType, ToolStatus,
         plain_text_processor::PlainTextLogProcessor,
         utils::{
             ConversationPatch, EntryIndexProvider,
@@ -172,6 +176,53 @@ impl ToNormalizedEntry for WebSearchState {
     }
 }
 
+struct UserInputRequestState {
+    index: Option<usize>,
+    questions: Vec<AskUserQuestionItem>,
+    content: String,
+    status: ToolStatus,
+}
+
+impl ToNormalizedEntry for UserInputRequestState {
+    fn to_normalized_entry(&self) -> NormalizedEntry {
+        NormalizedEntry {
+            timestamp: None,
+            entry_type: NormalizedEntryType::ToolUse {
+                tool_name: "question".to_string(),
+                action_type: ActionType::AskUserQuestion {
+                    questions: self.questions.clone(),
+                },
+                status: self.status.clone(),
+            },
+            content: self.content.clone(),
+            metadata: None,
+        }
+    }
+}
+
+struct PlanState {
+    index: Option<usize>,
+    text: String,
+    status: ToolStatus,
+}
+
+impl ToNormalizedEntry for PlanState {
+    fn to_normalized_entry(&self) -> NormalizedEntry {
+        NormalizedEntry {
+            timestamp: None,
+            entry_type: NormalizedEntryType::ToolUse {
+                tool_name: "plan".to_string(),
+                action_type: ActionType::PlanPresentation {
+                    plan: self.text.clone(),
+                },
+                status: self.status.clone(),
+            },
+            content: "Plan".to_string(),
+            metadata: None,
+        }
+    }
+}
+
 struct ReviewState {
     index: Option<usize>,
     description: String,
@@ -287,6 +338,8 @@ struct LogState {
     mcp_tools: HashMap<String, McpToolState>,
     patches: HashMap<String, PatchState>,
     web_searches: HashMap<String, WebSearchState>,
+    user_input_requests: HashMap<String, UserInputRequestState>,
+    plans: HashMap<String, PlanState>,
     review: Option<ReviewState>,
     model_params: ModelParamsState,
 }
@@ -312,6 +365,8 @@ impl LogState {
             mcp_tools: HashMap::new(),
             patches: HashMap::new(),
             web_searches: HashMap::new(),
+            user_input_requests: HashMap::new(),
+            plans: HashMap::new(),
             review: None,
             model_params: ModelParamsState {
                 index: None,
@@ -419,6 +474,16 @@ impl LogState {
                     replace_normalized_entry(msg_store, index, entry.to_normalized_entry());
                 }
             }
+        } else if let Some(input_state) = self.user_input_requests.get_mut(call_id) {
+            input_state.status = status;
+            if let Some(index) = input_state.index {
+                replace_normalized_entry(msg_store, index, input_state.to_normalized_entry());
+            }
+        } else if let Some(plan_state) = self.plans.get_mut(call_id) {
+            plan_state.status = status;
+            if let Some(index) = plan_state.index {
+                replace_normalized_entry(msg_store, index, plan_state.to_normalized_entry());
+            }
         }
     }
 }
@@ -483,7 +548,10 @@ const SUPPRESSED_STDERR_PATTERNS: &[&str] = &[
 ];
 
 /// Codex-specific stderr normalizer that filters noisy internal messages.
-fn normalize_codex_stderr_logs(msg_store: Arc<MsgStore>, entry_index_provider: EntryIndexProvider) {
+fn normalize_codex_stderr_logs(
+    msg_store: Arc<MsgStore>,
+    entry_index_provider: EntryIndexProvider,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut stderr = msg_store.stderr_chunked_stream();
         let mut processor = PlainTextLogProcessor::builder()
@@ -511,15 +579,18 @@ fn normalize_codex_stderr_logs(msg_store: Arc<MsgStore>, entry_index_provider: E
                 msg_store.push_patch(patch);
             }
         }
-    });
+    })
 }
 
-pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
+pub fn normalize_logs(
+    msg_store: Arc<MsgStore>,
+    worktree_path: &Path,
+) -> Vec<tokio::task::JoinHandle<()>> {
     let entry_index = EntryIndexProvider::start_from(&msg_store);
-    normalize_codex_stderr_logs(msg_store.clone(), entry_index.clone());
+    let h1 = normalize_codex_stderr_logs(msg_store.clone(), entry_index.clone());
 
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
-    tokio::spawn(async move {
+    let h2 = tokio::spawn(async move {
         let mut state = LogState::new(entry_index.clone());
         let mut stdout_lines = msg_store.stdout_lines_stream();
 
@@ -554,6 +625,17 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                             add_normalized_entry(&msg_store, &entry_index, entry);
                         }
                     }
+                    Approval::QuestionResponse {
+                        call_id,
+                        question_status,
+                    } => {
+                        let status = ToolStatus::from_question_status(question_status);
+                        state.update_tool_status(call_id, status, true, &msg_store);
+
+                        if let Some(entry) = approval.to_normalized_entry_opt() {
+                            add_normalized_entry(&msg_store, &entry_index, entry);
+                        }
+                    }
                 }
                 continue;
             }
@@ -569,18 +651,22 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
             }
 
             if let Ok(server_notification) = serde_json::from_str::<ServerNotification>(&line) {
-                if let ServerNotification::SessionConfigured(session_configured) =
-                    server_notification
-                {
-                    msg_store.push_session_id(session_configured.session_id.to_string());
-                    handle_model_params(
-                        Some(session_configured.model),
-                        session_configured.reasoning_effort,
-                        &msg_store,
-                        &entry_index,
-                        &mut state.model_params,
-                    );
-                };
+                match server_notification {
+                    ServerNotification::SessionConfigured(session_configured) => {
+                        msg_store.push_session_id(session_configured.session_id.to_string());
+                        handle_model_params(
+                            Some(session_configured.model),
+                            session_configured.reasoning_effort,
+                            &msg_store,
+                            &entry_index,
+                            &mut state.model_params,
+                        );
+                    }
+                    ServerNotification::ThreadStarted(n) => {
+                        msg_store.push_session_id(n.thread.id);
+                    }
+                    _ => {}
+                }
                 continue;
             } else if let Some(session_id) = line
                 .strip_prefix(r#"{"method":"sessionConfigured","params":{"sessionId":""#)
@@ -630,7 +716,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     let (entry, index, is_new) = state.thinking_append(delta);
                     upsert_normalized_entry(&msg_store, index, entry, is_new);
                 }
-                EventMsg::AgentMessage(AgentMessageEvent { message }) => {
+                EventMsg::AgentMessage(AgentMessageEvent { message, .. }) => {
                     state.thinking = None;
                     let (entry, index, is_new) = state.assistant_message(message);
                     upsert_normalized_entry(&msg_store, index, entry, is_new);
@@ -657,6 +743,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     reason,
                     parsed_cmd: _,
                     proposed_execpolicy_amendment: _,
+                    ..
                 }) => {
                     state.assistant = None;
                     state.thinking = None;
@@ -835,6 +922,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     duration: _,
                     formatted_output,
                     process_id: _,
+                    ..
                 }) => {
                     if let Some(mut command_state) = state.commands.remove(&call_id) {
                         command_state.formatted_output = Some(formatted_output);
@@ -1164,6 +1252,24 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         },
                     );
                 }
+                EventMsg::ModelReroute(ModelRerouteEvent {
+                    from_model,
+                    to_model,
+                    ..
+                }) => {
+                    add_normalized_entry(
+                        &msg_store,
+                        &entry_index,
+                        NormalizedEntry {
+                            timestamp: None,
+                            entry_type: NormalizedEntryType::SystemMessage,
+                            content: format!(
+                                "warning: model rerouted from {from_model} to {to_model}"
+                            ),
+                            metadata: None,
+                        },
+                    );
+                }
                 EventMsg::Error(ErrorEvent {
                     message,
                     codex_error_info,
@@ -1236,6 +1342,75 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         }
                     }
                 }
+                EventMsg::RequestUserInput(RequestUserInputEvent {
+                    call_id,
+                    turn_id: _,
+                    questions: event_questions,
+                }) => {
+                    state.assistant = None;
+                    state.thinking = None;
+
+                    if call_id.is_empty() {
+                        continue;
+                    }
+
+                    let questions: Vec<AskUserQuestionItem> = event_questions
+                        .iter()
+                        .map(|q| AskUserQuestionItem {
+                            question: q.question.clone(),
+                            header: q.header.clone(),
+                            options: q
+                                .options
+                                .as_deref()
+                                .unwrap_or(&[])
+                                .iter()
+                                .map(|o| AskUserQuestionOption {
+                                    label: o.label.clone(),
+                                    description: o.description.clone(),
+                                })
+                                .collect(),
+                            multi_select: false,
+                        })
+                        .collect();
+
+                    let content = if questions.len() == 1 {
+                        questions[0].question.clone()
+                    } else {
+                        format!("{} questions", questions.len())
+                    };
+
+                    let index = entry_index.next();
+                    let tool_state = UserInputRequestState {
+                        index: Some(index),
+                        questions,
+                        content,
+                        status: ToolStatus::Created,
+                    };
+                    upsert_normalized_entry(
+                        &msg_store,
+                        index,
+                        tool_state.to_normalized_entry(),
+                        true,
+                    );
+                    state.user_input_requests.insert(call_id, tool_state);
+                }
+                EventMsg::PlanDelta(PlanDeltaEvent { delta, item_id, .. }) => {
+                    state.thinking = None;
+                    if let Some(plan_state) = state.plans.get_mut(&item_id) {
+                        plan_state.text.push_str(&delta);
+                        if let Some(index) = plan_state.index {
+                            replace_normalized_entry(
+                                &msg_store,
+                                index,
+                                plan_state.to_normalized_entry(),
+                            );
+                        }
+                    } else {
+                        // Backward compat: if no plan state, treat as assistant text
+                        let (entry, index, is_new) = state.assistant_message_append(delta);
+                        upsert_normalized_entry(&msg_store, index, entry, is_new);
+                    }
+                }
                 EventMsg::ContextCompacted(..) => {
                     add_normalized_entry(
                         &msg_store,
@@ -1247,6 +1422,40 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                             metadata: None,
                         },
                     );
+                }
+                EventMsg::ItemStarted(ItemStartedEvent {
+                    item: TurnItem::Plan(ref plan_item),
+                    ..
+                }) => {
+                    state.assistant = None;
+                    state.thinking = None;
+                    let mut plan_state = PlanState {
+                        index: None,
+                        text: String::new(),
+                        status: ToolStatus::Created,
+                    };
+                    let index = add_normalized_entry(
+                        &msg_store,
+                        &entry_index,
+                        plan_state.to_normalized_entry(),
+                    );
+                    plan_state.index = Some(index);
+                    state.plans.insert(plan_item.id.clone(), plan_state);
+                }
+                EventMsg::ItemCompleted(ItemCompletedEvent {
+                    item: TurnItem::Plan(ref plan_item),
+                    ..
+                }) => {
+                    if let Some(plan_state) = state.plans.get_mut(&plan_item.id) {
+                        plan_state.text = plan_item.text.clone();
+                        if let Some(index) = plan_state.index {
+                            replace_normalized_entry(
+                                &msg_store,
+                                index,
+                                plan_state.to_normalized_entry(),
+                            );
+                        }
+                    }
                 }
                 EventMsg::AgentReasoningRawContent(..)
                 | EventMsg::AgentReasoningRawContentDelta(..)
@@ -1286,14 +1495,18 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                 | EventMsg::CollabResumeBegin(..)
                 | EventMsg::CollabResumeEnd(..)
                 | EventMsg::ThreadNameUpdated(..)
-                | EventMsg::RequestUserInput(..)
                 | EventMsg::DynamicToolCallRequest(..)
+                | EventMsg::DynamicToolCallResponse(..)
                 | EventMsg::ListRemoteSkillsResponse(..)
                 | EventMsg::RemoteSkillDownloaded(..)
-                | EventMsg::PlanDelta(..) => {}
+                | EventMsg::RealtimeConversationStarted(..)
+                | EventMsg::RealtimeConversationRealtime(..)
+                | EventMsg::RealtimeConversationClosed(..) => {}
             }
         }
     });
+
+    vec![h1, h2]
 }
 
 fn handle_jsonrpc_response(
@@ -1302,23 +1515,28 @@ fn handle_jsonrpc_response(
     entry_index: &EntryIndexProvider,
     model_params: &mut ModelParamsState,
 ) {
-    let Ok(response) = serde_json::from_value::<NewConversationResponse>(response.result.clone())
-    else {
+    if let Ok(resp) = serde_json::from_value::<ThreadStartResponse>(response.result.clone()) {
+        msg_store.push_session_id(resp.thread.id);
+        handle_model_params(
+            Some(resp.model),
+            resp.reasoning_effort,
+            msg_store,
+            entry_index,
+            model_params,
+        );
         return;
-    };
-
-    match SessionHandler::extract_session_id_from_rollout_path(response.rollout_path) {
-        Ok(session_id) => msg_store.push_session_id(session_id),
-        Err(err) => tracing::error!("failed to extract session id: {err}"),
     }
 
-    handle_model_params(
-        Some(response.model),
-        response.reasoning_effort,
-        msg_store,
-        entry_index,
-        model_params,
-    );
+    if let Ok(resp) = serde_json::from_value::<ThreadForkResponse>(response.result.clone()) {
+        msg_store.push_session_id(resp.thread.id);
+        handle_model_params(
+            Some(resp.model),
+            resp.reasoning_effort,
+            msg_store,
+            entry_index,
+            model_params,
+        );
+    }
 }
 
 fn handle_model_params(
@@ -1439,6 +1657,10 @@ pub enum Approval {
         tool_name: String,
         approval_status: ApprovalStatus,
     },
+    QuestionResponse {
+        call_id: String,
+        question_status: QuestionStatus,
+    },
 }
 
 impl Approval {
@@ -1462,6 +1684,13 @@ impl Approval {
         }
     }
 
+    pub fn question_response(call_id: String, question_status: QuestionStatus) -> Self {
+        Self::QuestionResponse {
+            call_id,
+            question_status,
+        }
+    }
+
     pub fn raw(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }
@@ -1472,8 +1701,11 @@ impl Approval {
             | Self::ApprovalResponse { tool_name, .. } => match tool_name.as_str() {
                 "codex.exec_command" => "Exec Command".to_string(),
                 "codex.apply_patch" => "Edit".to_string(),
+                "codex.question" => "Question".to_string(),
+                "codex.plan" => "Plan".to_string(),
                 other => other.to_string(),
             },
+            Self::QuestionResponse { .. } => "Question".to_string(),
         }
     }
 }
@@ -1484,6 +1716,34 @@ impl ToNormalizedEntryOpt for Approval {
             Self::ApprovalResponse {
                 approval_status, ..
             } => approval_status,
+            Self::QuestionResponse {
+                question_status, ..
+            } => {
+                return match question_status {
+                    QuestionStatus::Answered { answers } => {
+                        let qa_pairs: Vec<AnsweredQuestion> = answers
+                            .iter()
+                            .map(|qa| AnsweredQuestion {
+                                question: qa.question.clone(),
+                                answer: qa.answer.clone(),
+                            })
+                            .collect();
+                        Some(NormalizedEntry {
+                            timestamp: None,
+                            entry_type: NormalizedEntryType::UserAnsweredQuestions {
+                                answers: qa_pairs,
+                            },
+                            content: format!(
+                                "Answered {} question{}",
+                                answers.len(),
+                                if answers.len() != 1 { "s" } else { "" }
+                            ),
+                            metadata: None,
+                        })
+                    }
+                    QuestionStatus::TimedOut => None,
+                };
+            }
             Self::ApprovalRequested { .. } => return None,
         };
         let tool_name = self.display_tool_name();

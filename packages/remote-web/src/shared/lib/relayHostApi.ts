@@ -3,6 +3,7 @@ import {
   resolveRelayHostContext,
   tryRefreshRelayHostSigningSession,
 } from "@remote/shared/lib/relay/context";
+import { getActiveRelayHostId } from "@remote/shared/lib/relay/activeHostContext";
 import {
   isAuthFailureStatus,
   sendRelayHostRequest,
@@ -39,9 +40,11 @@ export async function requestLocalApiViaRelay(
     return fetch(pathOrUrl, requestInit);
   }
 
-  const hostId = resolveRelayHostIdForCurrentPage();
+  const hostId = resolveRelayHostIdForCurrentPage() ?? getActiveRelayHostId();
   if (!hostId) {
-    return fetch(pathOrUrl, requestInit);
+    throw new Error(
+      "Host context is required for local API requests. Navigate under /hosts/{hostId}/...",
+    );
   }
 
   return requestRelayHostApi(hostId, pathAndQuery, requestInit);
@@ -56,9 +59,11 @@ export async function openLocalApiWebSocketViaRelay(
     return openBrowserWebSocket(pathOrUrl);
   }
 
-  const hostId = resolveRelayHostIdForCurrentPage();
+  const hostId = resolveRelayHostIdForCurrentPage() ?? getActiveRelayHostId();
   if (!hostId) {
-    return openBrowserWebSocket(pathOrUrl);
+    throw new Error(
+      "Host context is required for local API WebSocket requests. Navigate under /hosts/{hostId}/...",
+    );
   }
 
   return openRelayHostWebSocket(hostId, pathAndQuery);

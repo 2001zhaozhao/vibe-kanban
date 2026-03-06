@@ -16,6 +16,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SpinnerIcon } from '@phosphor-icons/react';
 
 import { cn } from '@/shared/lib/utils';
 import {
@@ -23,7 +24,7 @@ import {
   InitialDataScrollModifier,
   ScrollToBottomModifier,
 } from '@/shared/lib/virtuoso-modifiers';
-import NewDisplayConversationEntry from './NewDisplayConversationEntry';
+import DisplayConversationEntry from './DisplayConversationEntry';
 import { ApprovalFormProvider } from '@/shared/hooks/ApprovalForm';
 import { useEntries } from '../model/contexts/EntriesContext';
 import {
@@ -90,7 +91,7 @@ const ItemContent: VirtuosoMessageListProps<
   // Handle aggregated tool groups (file_read, search, web_fetch)
   if (isAggregatedGroup(data)) {
     return (
-      <NewDisplayConversationEntry
+      <DisplayConversationEntry
         expansionKey={data.patchKey}
         aggregatedGroup={data}
         aggregatedDiffGroup={null}
@@ -106,7 +107,7 @@ const ItemContent: VirtuosoMessageListProps<
   // Handle aggregated diff groups (file_edit by same path)
   if (isAggregatedDiffGroup(data)) {
     return (
-      <NewDisplayConversationEntry
+      <DisplayConversationEntry
         expansionKey={data.patchKey}
         aggregatedGroup={null}
         aggregatedDiffGroup={data}
@@ -122,7 +123,7 @@ const ItemContent: VirtuosoMessageListProps<
   // Handle aggregated thinking groups (thinking entries in previous turns)
   if (isAggregatedThinkingGroup(data)) {
     return (
-      <NewDisplayConversationEntry
+      <DisplayConversationEntry
         expansionKey={data.patchKey}
         aggregatedGroup={null}
         aggregatedDiffGroup={null}
@@ -143,7 +144,7 @@ const ItemContent: VirtuosoMessageListProps<
   }
   if (data.type === 'NORMALIZED_ENTRY' && attempt) {
     return (
-      <NewDisplayConversationEntry
+      <DisplayConversationEntry
         expansionKey={data.patchKey}
         entry={data.content}
         aggregatedGroup={null}
@@ -402,10 +403,15 @@ export const ConversationList = forwardRef<
     <ApprovalFormProvider>
       <div
         className={cn(
-          'h-full overflow-hidden transition-opacity duration-300',
+          'virtuoso-license-wrapper relative h-full overflow-hidden transition-opacity duration-300',
           hasContent ? 'opacity-100' : 'opacity-0'
         )}
       >
+        {!hasContent && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <SpinnerIcon className="size-6 animate-spin text-low" />
+          </div>
+        )}
         <VirtuosoMessageListLicense
           licenseKey={import.meta.env.VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY}
         >

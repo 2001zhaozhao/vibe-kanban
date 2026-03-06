@@ -62,9 +62,12 @@ interface AppBarProps {
   isLoadingProjects?: boolean;
   onSignIn?: () => void;
   onMigrate?: () => void;
+  onHoverStart?: () => void;
+  onHoverEnd?: () => void;
   userPopover?: ReactNode;
   starCount?: number | null;
   onlineCount?: number | null;
+  appVersion?: string | null;
   githubIconPath: string;
   discordIconPath: string;
 }
@@ -115,9 +118,12 @@ export function AppBar({
   isLoadingProjects,
   onSignIn,
   onMigrate,
+  onHoverStart,
+  onHoverEnd,
   userPopover,
   starCount,
   onlineCount,
+  appVersion,
   githubIconPath,
   discordIconPath,
 }: AppBarProps) {
@@ -127,6 +133,8 @@ export function AppBar({
 
   return (
     <div
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
       className={cn(
         'flex flex-col items-center h-full p-base gap-base',
         'bg-secondary border-r border-border'
@@ -394,6 +402,11 @@ export function AppBar({
             onlineCount != null && (onlineCount > 999 ? '999+' : onlineCount)
           }
         />
+        {appVersion && (
+          <p className="text-[9px] font-ibm-plex-mono text-low leading-none">
+            v{appVersion}
+          </p>
+        )}
       </div>
     </div>
   );

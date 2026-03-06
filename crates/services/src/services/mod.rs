@@ -22,5 +22,3 @@ pub mod queued_message;
 pub mod remote_client;
 pub mod remote_sync;
 pub mod repo;
-pub mod workspace_manager;
-pub mod worktree_manager;

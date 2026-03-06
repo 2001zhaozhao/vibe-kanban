@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DropResult } from '@hello-pangea/dnd';
-import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { Outlet } from '@tanstack/react-router';
 import { siDiscord, siGithub } from 'simple-icons';
 import { XIcon, PlusIcon, LayoutIcon, KanbanIcon } from '@phosphor-icons/react';
 import { SyncErrorProvider } from '@/shared/providers/SyncErrorProvider';
@@ -17,10 +17,13 @@ import { useOrganizationStore } from '@/shared/stores/useOrganizationStore';
 import { useAuth } from '@/shared/hooks/auth/useAuth';
 import { useDiscordOnlineCount } from '@/shared/hooks/useDiscordOnlineCount';
 import { useGitHubStars } from '@/shared/hooks/useGitHubStars';
+import { useUserSystem } from '@/shared/hooks/useUserSystem';
+import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
+import { useCurrentAppDestination } from '@/shared/hooks/useCurrentAppDestination';
 import {
-  buildProjectRootPath,
-  parseProjectSidebarRoute,
-} from '@/shared/lib/routes/projectSidebarRoutes';
+  getProjectDestination,
+  isWorkspacesDestination,
+} from '@/shared/lib/routes/appNavigation';
 import {
   CreateOrganizationDialog,
   type CreateOrganizationResult,
@@ -34,25 +37,21 @@ import { CommandBarDialog } from '@/shared/dialogs/command-bar/CommandBarDialog'
 import { useCommandBarShortcut } from '@/shared/hooks/useCommandBarShortcut';
 import { useShape } from '@/shared/integrations/electric/hooks';
 import { sortProjectsByOrder } from '@/shared/lib/projectOrder';
-import { resolveAppPath } from '@/shared/lib/routes/pathResolution';
 import {
   PROJECT_MUTATION,
   PROJECTS_SHAPE,
   type Project as RemoteProject,
 } from 'shared/remote-types';
-import {
-  toMigrate,
-  toProject,
-  toWorkspaces,
-} from '@/shared/lib/routes/navigation';
 
 export function SharedAppLayout() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isMigrateRoute = location.pathname.startsWith('/migrate');
+  const appNavigation = useAppNavigation();
+  const currentDestination = useCurrentAppDestination();
+  const isMigrateRoute = currentDestination?.kind === 'migrate';
   const isMobile = useIsMobile();
   const mobileFontScale = useUiPreferencesStore((s) => s.mobileFontScale);
+  const setAppBarHovered = useUiPreferencesStore((s) => s.setAppBarHovered);
   const { isSignedIn } = useAuth();
+  const { appVersion } = useUserSystem();
   const { data: onlineCount } = useDiscordOnlineCount();
   const { data: starCount } = useGitHubStars();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -76,6 +75,13 @@ export function SharedAppLayout() {
     };
   }, [isMobile, mobileFontScale]);
 
+  useEffect(
+    () => () => {
+      setAppBarHovered(false);
+    },
+    [setAppBarHovered]
+  );
+
   // AppBar state - organizations and projects
   const { data: orgsData } = useUserOrganizations();
   const organizations = useMemo(
@@ -86,7 +92,6 @@ export function SharedAppLayout() {
   const selectedOrgId = useOrganizationStore((s) => s.selectedOrgId);
   const setSelectedOrgId = useOrganizationStore((s) => s.setSelectedOrgId);
   const prevOrgIdRef = useRef<string | null>(null);
-  const projectLastPathRef = useRef<Record<string, string>>({});
 
   // Auto-select first org if none selected or selection is invalid
   useEffect(() => {
@@ -144,52 +149,43 @@ export function SharedAppLayout() {
       !isLoading
     ) {
       if (sortedProjects.length > 0) {
-        navigate(toProject(sortedProjects[0].id));
+        appNavigation.goToProject(sortedProjects[0].id);
       } else {
-        navigate(toWorkspaces());
+        appNavigation.goToWorkspaces();
       }
       prevOrgIdRef.current = selectedOrgId;
     } else if (prevOrgIdRef.current === null && selectedOrgId) {
       prevOrgIdRef.current = selectedOrgId;
     }
-  }, [selectedOrgId, sortedProjects, isLoading, navigate, isMigrateRoute]);
+  }, [selectedOrgId, sortedProjects, isLoading, isMigrateRoute, appNavigation]);
 
   // Navigation state for AppBar active indicators
-  const isWorkspacesActive = location.pathname.startsWith('/workspaces');
-  const activeProjectId = location.pathname.startsWith('/projects/')
-    ? location.pathname.split('/')[2]
-    : null;
+  const projectDestination = useMemo(
+    () => getProjectDestination(currentDestination),
+    [currentDestination]
+  );
+  const isWorkspacesActive = isWorkspacesDestination(currentDestination);
+  const activeProjectId = projectDestination?.projectId ?? null;
 
-  // Remember the last visited route for each project so AppBar clicks can
-  // reopen the previous issue/workspace selection.
+  // Persist last selected project to scratch store
+  const setSelectedProjectId = useUiPreferencesStore(
+    (s) => s.setSelectedProjectId
+  );
   useEffect(() => {
-    const route = parseProjectSidebarRoute(location.pathname);
-    if (!route) {
-      return;
+    if (activeProjectId) {
+      setSelectedProjectId(activeProjectId);
     }
-
-    const pathWithSearch = `${location.pathname}${location.searchStr}`;
-    projectLastPathRef.current[route.projectId] = pathWithSearch;
-  }, [location.pathname, location.searchStr]);
+  }, [activeProjectId, setSelectedProjectId]);
 
   const handleWorkspacesClick = useCallback(() => {
-    navigate(toWorkspaces());
-  }, [navigate]);
+    appNavigation.goToWorkspaces();
+  }, [appNavigation]);
 
   const handleProjectClick = useCallback(
     (projectId: string) => {
-      const rememberedPath = projectLastPathRef.current[projectId];
-      if (rememberedPath) {
-        const resolvedPath = resolveAppPath(rememberedPath);
-        if (resolvedPath) {
-          navigate(resolvedPath);
-          return;
-        }
-      }
-
-      navigate(buildProjectRootPath(projectId));
+      appNavigation.goToProject(projectId);
     },
-    [navigate]
+    [appNavigation]
   );
 
   const handleProjectsDragEnd = useCallback(
@@ -251,12 +247,12 @@ export function SharedAppLayout() {
         await CreateRemoteProjectDialog.show({ organizationId: selectedOrgId });
 
       if (result.action === 'created' && result.project) {
-        navigate(toProject(result.project.id));
+        appNavigation.goToProject(result.project.id);
       }
     } catch {
       // Dialog cancelled
     }
-  }, [navigate, selectedOrgId]);
+  }, [selectedOrgId, appNavigation]);
 
   const handleSignIn = useCallback(async () => {
     try {
@@ -271,15 +267,15 @@ export function SharedAppLayout() {
       try {
         const profile = await OAuthDialog.show({});
         if (profile) {
-          navigate(toMigrate());
+          appNavigation.goToMigrate();
         }
       } catch {
         // Dialog cancelled
       }
     } else {
-      navigate(toMigrate());
+      appNavigation.goToMigrate();
     }
-  }, [isSignedIn, navigate]);
+  }, [isSignedIn, appNavigation]);
 
   return (
     <SyncErrorProvider>
@@ -305,6 +301,8 @@ export function SharedAppLayout() {
             isLoadingProjects={isLoading}
             onSignIn={handleSignIn}
             onMigrate={handleMigrate}
+            onHoverStart={() => setAppBarHovered(true)}
+            onHoverEnd={() => setAppBarHovered(false)}
             userPopover={
               <AppBarUserPopoverContainer
                 organizations={organizations}
@@ -315,6 +313,7 @@ export function SharedAppLayout() {
             }
             starCount={starCount}
             onlineCount={onlineCount}
+            appVersion={appVersion}
             githubIconPath={siGithub.path}
             discordIconPath={siDiscord.path}
           />
@@ -345,7 +344,7 @@ export function SharedAppLayout() {
             <button
               type="button"
               onClick={() => {
-                navigate(toWorkspaces());
+                appNavigation.goToWorkspaces();
                 setIsDrawerOpen(false);
               }}
               className="flex items-center gap-2 px-4 py-3 text-sm text-normal hover:bg-secondary cursor-pointer"

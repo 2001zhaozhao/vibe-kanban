@@ -23,7 +23,6 @@ use services::services::{
     queued_message::QueuedMessageService,
     remote_client::{RemoteClient, RemoteClientError},
     repo::RepoService,
-    worktree_manager::WorktreeManager,
 };
 use tokio::sync::RwLock;
 use trusted_key_auth::runtime::TrustedKeyAuthRuntime;
@@ -32,6 +31,8 @@ use utils::{
     msg_store::MsgStore,
 };
 use uuid::Uuid;
+use workspace_manager::WorkspaceManager;
+use worktree_manager::WorktreeManager;
 
 use crate::{container::LocalContainerService, pty::PtyService};
 mod command;
@@ -44,6 +45,7 @@ pub struct LocalDeployment {
     config: Arc<RwLock<Config>>,
     user_id: String,
     db: DBService,
+    workspace_manager: WorkspaceManager,
     analytics: Option<AnalyticsService>,
     container: LocalContainerService,
     git: GitService,
@@ -227,8 +229,10 @@ impl Deployment for LocalDeployment {
             user_id: user_id.clone(),
             analytics_service: s.clone(),
         });
+        let workspace_manager = WorkspaceManager::new(db.clone());
         let container = LocalContainerService::new(
             db.clone(),
+            workspace_manager.clone(),
             msg_stores.clone(),
             config.clone(),
             git.clone(),
@@ -260,6 +264,7 @@ impl Deployment for LocalDeployment {
             config,
             user_id,
             db,
+            workspace_manager,
             analytics,
             container,
             git,
@@ -363,6 +368,10 @@ impl Deployment for LocalDeployment {
 }
 
 impl LocalDeployment {
+    pub fn workspace_manager(&self) -> &WorkspaceManager {
+        &self.workspace_manager
+    }
+
     pub fn remote_client(&self) -> Result<RemoteClient, RemoteClientNotConfigured> {
         self.remote_client.clone()
     }

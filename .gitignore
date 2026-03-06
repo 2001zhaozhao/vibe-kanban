@@ -95,3 +95,9 @@ local/
 
 # Vite temp files
 *.timestamp-*.mjs
+
+# Mobile testing (per-developer, do not commit)
+*.ts.net.crt
+*.ts.net.key
+Caddyfile
+Caddyfile.dev

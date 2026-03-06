@@ -69,7 +69,7 @@ fn base_command(claude_code_router: bool) -> &'static str {
 fn normalize_claude_stderr_logs(
     msg_store: Arc<MsgStore>,
     entry_index_provider: EntryIndexProvider,
-) {
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut stderr = msg_store.stderr_chunked_stream();
 
@@ -98,7 +98,7 @@ fn normalize_claude_stderr_logs(
                 msg_store.push_patch(patch);
             }
         }
-    });
+    })
 }
 
 use derivative::Derivative;
@@ -259,8 +259,7 @@ fn default_discovered_options() -> crate::executor_discovery::ExecutorDiscovered
                 ("claude-opus-4-6", "Opus"),
                 ("claude-opus-4-6[1m]", "Opus (1M context)"),
                 ("claude-haiku-4-5-20251001", "Haiku"),
-                ("claude-sonnet-4-5-20250929", "Sonnet 4.5"),
-                ("claude-sonnet-4-6", "Sonnet 4.6"),
+                ("claude-sonnet-4-6", "Sonnet"),
             ]
             .into_iter()
             .map(|(id, name)| ModelInfo {
@@ -353,18 +352,25 @@ impl StandardCodingAgentExecutor for ClaudeCode {
             .await
     }
 
-    fn normalize_logs(&self, msg_store: Arc<MsgStore>, current_dir: &Path) {
+    fn normalize_logs(
+        &self,
+        msg_store: Arc<MsgStore>,
+        current_dir: &Path,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
         let entry_index_provider = EntryIndexProvider::start_from(&msg_store);
 
         // Process stdout logs (Claude's JSON output)
-        ClaudeLogProcessor::process_logs(
+        let h1 = ClaudeLogProcessor::process_logs(
             msg_store.clone(),
             current_dir,
             entry_index_provider.clone(),
             HistoryStrategy::Default,
         );
 
-        normalize_claude_stderr_logs(msg_store, entry_index_provider);
+        // Process stderr logs
+        let h2 = normalize_claude_stderr_logs(msg_store, entry_index_provider);
+
+        vec![h1, h2]
     }
 
     async fn discover_options(
@@ -724,7 +730,7 @@ impl ClaudeLogProcessor {
         current_dir: &Path,
         entry_index_provider: EntryIndexProvider,
         strategy: HistoryStrategy,
-    ) {
+    ) -> tokio::task::JoinHandle<()> {
         let current_dir_clone = current_dir.to_owned();
         tokio::spawn(async move {
             let mut stream = msg_store.history_plus_stream();
@@ -844,7 +850,7 @@ impl ClaudeLogProcessor {
                 let patch = ConversationPatch::add_normalized_entry(patch_id, entry);
                 msg_store.push_patch(patch);
             }
-        });
+        })
     }
 
     /// Extract session ID from Claude JSON
@@ -1216,6 +1222,9 @@ impl ClaudeLogProcessor {
                             // this name matches the model names in the usage report in the result message
                             if let Some(model) = model {
                                 self.main_model_name = Some(model.clone());
+                                if model.contains("[1m]") {
+                                    self.main_model_context_window = 1_000_000;
+                                }
                             }
                         }
                         // Skip system init messages because it doesn't contain the actual model that will be used in assistant messages in case of claude-code-router.

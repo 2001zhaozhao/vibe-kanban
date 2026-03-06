@@ -314,9 +314,10 @@ type State = {
   isLeftSidebarVisible: boolean;
   isRightSidebarVisible: boolean;
   isTerminalVisible: boolean;
+  isAppBarHovered: boolean;
   previewRefreshKey: number;
   // Note: Kanban issue panel state (selectedKanbanIssueId, createMode, etc.)
-  // is now derived from URL via useKanbanNavigation hook
+  // is derived from URL via app navigation route state
 
   // Workspace-specific panel state
   workspacePanelStates: Record<string, WorkspacePanelState>;
@@ -344,6 +345,10 @@ type State = {
   // Mobile font scale
   mobileFontScale: MobileFontScale;
 
+  // Last selected organization and project (persisted via scratch store)
+  selectedOrgId: string | null;
+  selectedProjectId: string | null;
+
   // UI preferences actions
   setRepoAction: (repoId: string, action: RepoAction) => void;
   setExpanded: (key: string, value: boolean) => void;
@@ -363,7 +368,7 @@ type State = {
   toggleTerminal: () => void;
   setTerminalVisible: (value: boolean) => void;
   // Note: Kanban panel actions (openKanbanIssuePanel, closeKanbanIssuePanel, etc.)
-  // are now handled by navigation via useKanbanNavigation hook
+  // are handled by app navigation
   toggleRightMainPanelMode: (
     mode: RightMainPanelMode,
     workspaceId?: string
@@ -418,9 +423,15 @@ type State = {
 
   // Mobile tab actions
   setMobileActiveTab: (tab: MobileTab) => void;
+  setAppBarHovered: (value: boolean) => void;
 
   // Mobile font scale actions
   setMobileFontScale: (scale: MobileFontScale) => void;
+
+  // Last selected organization and project actions
+  setSelectedOrgId: (orgId: string | null) => void;
+  clearSelectedOrgId: () => void;
+  setSelectedProjectId: (projectId: string | null) => void;
 };
 
 export const useUiPreferencesStore = create<State>()((set, get) => ({
@@ -437,6 +448,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   isLeftSidebarVisible: true,
   isRightSidebarVisible: true,
   isTerminalVisible: true,
+  isAppBarHovered: false,
   previewRefreshKey: 0,
 
   // Workspace-specific panel state
@@ -459,6 +471,10 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Mobile font scale
   mobileFontScale: loadMobileFontScale(),
+
+  // Last selected organization and project
+  selectedOrgId: null,
+  selectedProjectId: null,
 
   // UI preferences actions
   setRepoAction: (repoId, action) =>
@@ -768,6 +784,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Mobile tab actions
   setMobileActiveTab: (tab) => set({ mobileActiveTab: tab }),
+  setAppBarHovered: (value) => set({ isAppBarHovered: value }),
 
   // Mobile font scale actions
   setMobileFontScale: (scale) => {
@@ -782,6 +799,11 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
     }
     set({ mobileFontScale: scale });
   },
+
+  // Last selected organization and project actions
+  setSelectedOrgId: (orgId) => set({ selectedOrgId: orgId }),
+  clearSelectedOrgId: () => set({ selectedOrgId: null }),
+  setSelectedProjectId: (projectId) => set({ selectedProjectId: projectId }),
 }));
 
 // Hook for repo action preference

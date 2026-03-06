@@ -1,6 +1,6 @@
 [package]
 name = "local-deployment"
-version = "0.1.21"
+version = "0.1.24"
 edition = "2024"
 
 [dependencies]
@@ -11,6 +11,8 @@ deployment = { path = "../deployment" }
 relay-control = { path = "../relay-control" }
 server-info = { path = "../server-info" }
 services = { path = "../services" }
+worktree-manager = { path = "../worktree-manager" }
+workspace-manager = { path = "../workspace-manager" }
 utils = { path = "../utils" }
 git = { path = "../git" }
 trusted-key-auth = { path = "../trusted-key-auth" }

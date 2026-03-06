@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.1.21"
+version = "0.1.24"
 edition = "2024"
 default-run = "server"
 
@@ -17,6 +17,8 @@ git = { path = "../git" }
 git-host = { path = "../git-host" }
 db = { path = "../db" }
 services = { path = "../services" }
+worktree-manager = { path = "../worktree-manager" }
+workspace-manager = { path = "../workspace-manager" }
 relay-tunnel = { path = "../relay-tunnel" }
 trusted-key-auth = { path = "../trusted-key-auth" }
 tokio = { workspace = true }
@@ -56,8 +58,7 @@ url = "2.5"
 rand = { version = "0.8", features = ["std"] }
 sha2 = "0.10"
 regex = "1"
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
-native-tls = "0.2"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 rmp-serde = "1.3"
 
 [build-dependencies]

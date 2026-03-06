@@ -23,13 +23,15 @@ use axum::{
 use db::models::{
     coding_agent_turn::CodingAgentTurn,
     execution_process::{ExecutionProcess, ExecutionProcessRunReason, ExecutionProcessStatus},
-    image::WorkspaceImage,
     merge::{Merge, MergeStatus, PrMerge, PullRequestInfo},
     repo::{Repo, RepoError},
-    requests::{CreateAndStartWorkspaceRequest, CreateAndStartWorkspaceResponse, UpdateWorkspace},
+    requests::{
+        CreateAndStartWorkspaceRequest, CreateAndStartWorkspaceResponse, UpdateWorkspace,
+        WorkspaceRepoInput,
+    },
     session::{CreateSession, Session},
     workspace::{CreateWorkspace, Workspace, WorkspaceError},
-    workspace_repo::{CreateWorkspaceRepo, RepoWithTargetBranch, WorkspaceRepo},
+    workspace_repo::{RepoWithTargetBranch, WorkspaceRepo},
 };
 use deployment::Deployment;
 use executors::{
@@ -40,7 +42,7 @@ use executors::{
     executors::{CodingAgent, ExecutorError},
     profile::{ExecutorConfigs, ExecutorProfileId},
 };
-use git::{ConflictOp, GitCliError, GitService, GitServiceError};
+use git::{ConflictOp, GitCliError, GitServiceError};
 use git2::BranchType;
 use serde::{Deserialize, Serialize};
 use services::services::{
@@ -49,12 +51,12 @@ use services::services::{
     image::ImageService,
     remote_client::{RemoteClient, RemoteClientError},
     remote_sync,
-    workspace_manager::WorkspaceManager,
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
 use utils::response::ApiResponse;
 use uuid::Uuid;
+use workspace_manager::WorkspaceManager;
 
 use crate::{
     DeploymentImpl,
@@ -120,6 +122,18 @@ pub struct DeleteWorkspaceQuery {
 pub struct LinkWorkspaceRequest {
     pub project_id: Uuid,
     pub issue_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+pub struct AddWorkspaceRepoRequest {
+    pub repo_id: Uuid,
+    pub target_branch: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct AddWorkspaceRepoResponse {
+    pub workspace: Workspace,
+    pub repo: RepoWithTargetBranch,
 }
 
 pub async fn get_task_attempts(
@@ -1575,6 +1589,59 @@ pub async fn get_task_attempt_repos(
     Ok(ResponseJson(ApiResponse::success(repos)))
 }
 
+#[axum::debug_handler]
+pub async fn add_workspace_repo(
+    Extension(workspace): Extension<Workspace>,
+    State(deployment): State<DeploymentImpl>,
+    Json(payload): Json<AddWorkspaceRepoRequest>,
+) -> Result<ResponseJson<ApiResponse<AddWorkspaceRepoResponse>>, ApiError> {
+    let mut managed_workspace = deployment
+        .workspace_manager()
+        .load_managed_workspace(workspace)
+        .await?;
+
+    let repo_input = WorkspaceRepoInput {
+        repo_id: payload.repo_id,
+        target_branch: payload.target_branch,
+    };
+
+    managed_workspace
+        .add_repository(&repo_input, deployment.git())
+        .await
+        .map_err(ApiError::from)?;
+
+    deployment
+        .container()
+        .ensure_container_exists(&managed_workspace.workspace)
+        .await?;
+
+    let workspace = Workspace::find_by_id(&deployment.db().pool, managed_workspace.workspace.id)
+        .await?
+        .ok_or(WorkspaceError::WorkspaceNotFound)?;
+    let repo = managed_workspace
+        .repos
+        .iter()
+        .find(|repo_with_target| repo_with_target.repo.id == repo_input.repo_id)
+        .cloned()
+        .ok_or_else(|| {
+            ApiError::Conflict("Repository already attached to workspace".to_string())
+        })?;
+
+    deployment
+        .track_if_analytics_allowed(
+            "task_attempt_repo_added",
+            serde_json::json!({
+                "workspace_id": workspace.id.to_string(),
+                "repo_id": repo.repo.id.to_string(),
+            }),
+        )
+        .await;
+
+    Ok(ResponseJson(ApiResponse::success(
+        AddWorkspaceRepoResponse { workspace, repo },
+    )))
+}
+
 pub async fn get_first_user_message(
     Extension(workspace): Extension<Workspace>,
     State(deployment): State<DeploymentImpl>,
@@ -1592,9 +1659,11 @@ pub async fn delete_workspace(
     Query(query): Query<DeleteWorkspaceQuery>,
 ) -> Result<(StatusCode, ResponseJson<ApiResponse<()>>), ApiError> {
     let pool = &deployment.db().pool;
+    let workspace_manager = deployment.workspace_manager();
+    let workspace_id = workspace.id;
 
     // Check for running execution processes
-    if ExecutionProcess::has_running_non_dev_server_processes_for_workspace(pool, workspace.id)
+    if ExecutionProcess::has_running_non_dev_server_processes_for_workspace(pool, workspace_id)
         .await?
     {
         return Err(ApiError::Conflict(
@@ -1605,13 +1674,13 @@ pub async fn delete_workspace(
 
     // Stop any running dev servers for this workspace
     let dev_servers =
-        ExecutionProcess::find_running_dev_servers_by_workspace(pool, workspace.id).await?;
+        ExecutionProcess::find_running_dev_servers_by_workspace(pool, workspace_id).await?;
 
     for dev_server in dev_servers {
         tracing::info!(
             "Stopping dev server {} before deleting workspace {}",
             dev_server.id,
-            workspace.id
+            workspace_id
         );
 
         if let Err(e) = deployment
@@ -1622,23 +1691,18 @@ pub async fn delete_workspace(
             tracing::error!(
                 "Failed to stop dev server {} for workspace {}: {}",
                 dev_server.id,
-                workspace.id,
+                workspace_id,
                 e
             );
         }
     }
 
-    // Gather data needed for background cleanup
-    let workspace_dir = workspace.container_ref.clone().map(PathBuf::from);
-    let repositories = WorkspaceRepo::find_repos_for_workspace(pool, workspace.id).await?;
-    let session_ids: Vec<Uuid> = Session::find_by_workspace_id(pool, workspace.id)
-        .await?
-        .into_iter()
-        .map(|s| s.id)
-        .collect();
+    let managed_workspace = workspace_manager.load_managed_workspace(workspace).await?;
+
+    let deletion_context = managed_workspace.prepare_deletion_context().await?;
 
     // Delete workspace from database (FK CASCADE will handle sessions, execution_processes, etc.)
-    let rows_affected = Workspace::delete(pool, workspace.id).await?;
+    let rows_affected = managed_workspace.delete_record().await?;
 
     if rows_affected == 0 {
         return Err(ApiError::Database(SqlxError::RowNotFound));
@@ -1648,7 +1712,7 @@ pub async fn delete_workspace(
         .track_if_analytics_allowed(
             "workspace_deleted",
             serde_json::json!({
-                "workspace_id": workspace.id.to_string(),
+                "workspace_id": workspace_id.to_string(),
             }),
         )
         .await;
@@ -1656,14 +1720,14 @@ pub async fn delete_workspace(
     // Attempt remote workspace deletion if requested
     if query.delete_remote {
         if let Ok(client) = deployment.remote_client() {
-            match client.delete_workspace(workspace.id).await {
+            match client.delete_workspace(workspace_id).await {
                 Ok(()) => {
-                    tracing::info!("Deleted remote workspace for {}", workspace.id);
+                    tracing::info!("Deleted remote workspace for {}", workspace_id);
                 }
                 Err(e) => {
                     tracing::warn!(
                         "Failed to delete remote workspace for {}: {}",
-                        workspace.id,
+                        workspace_id,
                         e
                     );
                 }
@@ -1671,76 +1735,12 @@ pub async fn delete_workspace(
         } else {
             tracing::debug!(
                 "Remote client not available, skipping remote deletion for {}",
-                workspace.id
+                workspace_id
             );
         }
     }
 
-    // Spawn background cleanup task for filesystem resources
-    let workspace_id = workspace.id;
-    let delete_branches = query.delete_branches;
-    let branch_name = workspace.branch.clone();
-    let repo_paths: Vec<PathBuf> = repositories.iter().map(|r| r.path.clone()).collect();
-
-    tokio::spawn(async move {
-        for session_id in session_ids {
-            if let Err(e) =
-                services::services::execution_process::remove_session_process_logs(session_id).await
-            {
-                tracing::warn!(
-                    "Failed to remove filesystem process logs for session {}: {}",
-                    session_id,
-                    e
-                );
-            }
-        }
-
-        if let Some(workspace_dir) = workspace_dir {
-            tracing::info!(
-                "Starting background cleanup for workspace {} at {}",
-                workspace_id,
-                workspace_dir.display()
-            );
-
-            if let Err(e) = WorkspaceManager::cleanup_workspace(&workspace_dir, &repositories).await
-            {
-                tracing::error!(
-                    "Background workspace cleanup failed for {} at {}: {}",
-                    workspace_id,
-                    workspace_dir.display(),
-                    e
-                );
-            } else {
-                tracing::info!(
-                    "Background cleanup completed for workspace {}",
-                    workspace_id
-                );
-            }
-        }
-
-        if delete_branches {
-            let git_service = GitService::new();
-            for repo_path in repo_paths {
-                match git_service.delete_branch(&repo_path, &branch_name) {
-                    Ok(()) => {
-                        tracing::info!(
-                            "Deleted branch '{}' from repo {:?}",
-                            branch_name,
-                            repo_path
-                        );
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to delete branch '{}' from repo {:?}: {}",
-                            branch_name,
-                            repo_path,
-                            e
-                        );
-                    }
-                }
-            }
-        }
-    });
+    WorkspaceManager::spawn_workspace_deletion_cleanup(deletion_context, query.delete_branches);
 
     // Return 202 Accepted to indicate deletion was scheduled
     Ok((StatusCode::ACCEPTED, ResponseJson(ApiResponse::success(()))))
@@ -1949,7 +1949,7 @@ pub async fn create_and_start_workspace(
         ));
     }
 
-    let pool = &deployment.db().pool;
+    let workspace_manager = deployment.workspace_manager();
 
     let workspace_id = Uuid::new_v4();
     let branch_label = name.as_deref().unwrap_or("workspace");
@@ -1958,52 +1958,28 @@ pub async fn create_and_start_workspace(
         .git_branch_from_workspace(&workspace_id, branch_label)
         .await;
 
-    // Compute agent_working_dir based on repo count:
-    // - Single repo: join repo name with default_working_dir (if set), or just repo name
-    // - Multiple repos: use None (agent runs in workspace root)
-    let agent_working_dir = if repos.len() == 1 {
-        let repo = Repo::find_by_id(pool, repos[0].repo_id)
-            .await?
-            .ok_or(RepoError::NotFound)?;
-        match repo.default_working_dir {
-            Some(subdir) => {
-                let path = PathBuf::from(&repo.name).join(&subdir);
-                Some(path.to_string_lossy().to_string())
-            }
-            None => Some(repo.name),
-        }
-    } else {
-        None
-    };
-
-    let mut workspace = Workspace::create(
-        pool,
+    let workspace = Workspace::create(
+        &deployment.db().pool,
         &CreateWorkspace {
             branch: git_branch_name,
-            agent_working_dir,
+            name: name.clone().filter(|n| !n.is_empty()),
         },
         workspace_id,
     )
     .await?;
 
-    // Set workspace name if provided
-    if let Some(name) = &name {
-        Workspace::update(pool, workspace.id, None, None, Some(name)).await?;
-        workspace.name = Some(name.clone());
-    }
+    let mut managed_workspace = workspace_manager.load_managed_workspace(workspace).await?;
 
-    let workspace_repos: Vec<CreateWorkspaceRepo> = repos
-        .iter()
-        .map(|r| CreateWorkspaceRepo {
-            repo_id: r.repo_id,
-            target_branch: r.target_branch.clone(),
-        })
-        .collect();
-    WorkspaceRepo::create_many(pool, workspace.id, &workspace_repos).await?;
+    for repo in &repos {
+        managed_workspace
+            .add_repository(repo, deployment.git())
+            .await
+            .map_err(ApiError::from)?;
+    }
 
     // Associate user-uploaded images with the workspace
     if let Some(ids) = &image_ids {
-        WorkspaceImage::associate_many_dedup(pool, workspace.id, ids).await?;
+        managed_workspace.associate_images(ids).await?;
     }
 
     // Register the new workspace on the remote server, linking it to the issue
@@ -2043,9 +2019,7 @@ pub async fn create_and_start_workspace(
         match import_issue_attachments(&client, deployment.image(), linked_issue.issue_id).await {
             Ok(imported) if !imported.is_empty() => {
                 let imported_ids: Vec<Uuid> = imported.iter().map(|i| i.image_id).collect();
-                if let Err(e) =
-                    WorkspaceImage::associate_many_dedup(pool, workspace.id, &imported_ids).await
-                {
+                if let Err(e) = managed_workspace.associate_images(&imported_ids).await {
                     tracing::warn!("Failed to associate imported images with workspace: {}", e);
                 }
 
@@ -2066,6 +2040,7 @@ pub async fn create_and_start_workspace(
         }
     }
 
+    let workspace = managed_workspace.workspace.clone();
     tracing::info!("Created workspace {}", workspace.id);
 
     let execution_process = deployment
@@ -2124,7 +2099,10 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
                 .route("/stop", post(stop_task_attempt_execution))
                 .route("/change-target-branch", post(change_target_branch))
                 .route("/rename-branch", post(rename_branch))
-                .route("/repos", get(get_task_attempt_repos))
+                .route(
+                    "/repos",
+                    get(get_task_attempt_repos).post(add_workspace_repo),
+                )
                 .route("/first-message", get(get_first_user_message))
                 .route("/mark-seen", put(mark_seen))
                 .route("/link", post(link_workspace))
