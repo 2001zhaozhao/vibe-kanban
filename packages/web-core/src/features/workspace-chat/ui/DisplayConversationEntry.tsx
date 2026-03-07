@@ -253,6 +253,11 @@ function renderToolUseEntry(
     );
   }
 
+  // AskUserQuestion - handled by SessionChatBox banner, not in conversation list
+  if (action_type.action === 'ask_user_question') {
+    return null;
+  }
+
   // Generic tool pending approval - use plan-style card
   if (status.status === 'pending_approval') {
     return (
