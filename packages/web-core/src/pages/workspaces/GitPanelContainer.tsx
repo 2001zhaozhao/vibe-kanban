@@ -13,7 +13,7 @@ import { ForcePushDialog } from '@/shared/dialogs/command-bar/ForcePushDialog';
 import { CommandBarDialog } from '@/shared/dialogs/command-bar/CommandBarDialog';
 import { GitPanel, type RepoInfo } from '@vibe/ui/components/GitPanel';
 import { Actions } from '@/shared/actions';
-import { attemptsApi } from '@/shared/lib/api';
+import { workspacesApi } from '@/shared/lib/api';
 import { toast } from 'sonner';
 import type { RepoAction } from '@vibe/ui/components/RepoCard';
 import type {
@@ -330,7 +330,7 @@ export function GitPanelContainer({
     setIsMergeAllPending(true);
     try {
       for (const repo of mergeableRepos) {
-        await attemptsApi.merge(selectedWorkspace.id, { repo_id: repo.id });
+        await workspacesApi.merge(selectedWorkspace.id, { repo_id: repo.id });
       }
       clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
       toast.success('All branches merged successfully');
@@ -374,7 +374,7 @@ export function GitPanelContainer({
     try {
       if (mergeableRepos.length > 0) {
         for (const repo of mergeableRepos) {
-          await attemptsApi.merge(selectedWorkspace.id, { repo_id: repo.id });
+          await workspacesApi.merge(selectedWorkspace.id, { repo_id: repo.id });
         }
         clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
       }

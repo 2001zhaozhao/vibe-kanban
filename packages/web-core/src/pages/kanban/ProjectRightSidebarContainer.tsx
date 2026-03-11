@@ -18,9 +18,9 @@ import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/Me
 import { CreateModeProvider } from '@/features/create-mode/model/CreateModeProvider';
 import { useWorkspaceSessions } from '@/shared/hooks/useWorkspaceSessions';
 import { useWorkspaceRecord } from '@/shared/hooks/useWorkspaceRecord';
-import { attemptsApi } from '@/shared/lib/api';
+import { workspacesApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
-import { useAttemptRepo } from '@/shared/hooks/useAttemptRepo';
+import { useWorkspaceRepo } from '@/shared/hooks/useWorkspaceRepo';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
 import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
 import { SessionChatBoxContainer } from '@/features/workspace-chat/ui/SessionChatBoxContainer';
@@ -225,7 +225,7 @@ function WorkspaceSessionPanel({
   }, []);
 
   // Repos and executor config for "Clear Context and Accept"
-  const { repos } = useAttemptRepo(workspaceId);
+  const { repos } = useWorkspaceRepo(workspaceId);
   const { executionProcesses } = useExecutionProcesses(selectedSessionId);
   const latestExecutorConfig = useMemo(
     () => getLatestConfigFromProcesses(executionProcesses),
@@ -240,7 +240,7 @@ function WorkspaceSessionPanel({
         ? `Implement the following plan that was approved by the user:\n\n${planText}`
         : 'Continue implementing the approved plan.';
 
-      const newWorkspace = await attemptsApi.createAndStart({
+      const newWorkspace = await workspacesApi.createAndStart({
         name: null,
         repos: repos.map((r) => ({
           repo_id: r.id,
@@ -263,7 +263,7 @@ function WorkspaceSessionPanel({
         image_ids: null,
       });
 
-      await attemptsApi.update(workspaceId, { archived: true });
+      await workspacesApi.update(workspaceId, { archived: true });
 
       if (linkedIssueId && projectId) {
         appNavigation.goToProjectIssueWorkspace(

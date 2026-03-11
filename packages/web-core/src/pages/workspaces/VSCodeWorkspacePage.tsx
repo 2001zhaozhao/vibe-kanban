@@ -10,7 +10,7 @@ import { ArrowDownIcon } from '@phosphor-icons/react';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { usePageTitle } from '@/shared/hooks/usePageTitle';
 import { SessionChatBoxContainer } from '@/features/workspace-chat/ui/SessionChatBoxContainer';
-import { attemptsApi } from '@/shared/lib/api';
+import { workspacesApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useProjectContextOptional } from '@/shared/hooks/useProjectContext';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
@@ -76,7 +76,7 @@ export function VSCodeWorkspacePage() {
         ? `Implement the following plan that was approved by the user:\n\n${planText}`
         : 'Continue implementing the approved plan.';
 
-      const newWorkspace = await attemptsApi.createAndStart({
+      const newWorkspace = await workspacesApi.createAndStart({
         name: null,
         repos: repos.map((r) => ({
           repo_id: r.id,
@@ -98,7 +98,7 @@ export function VSCodeWorkspacePage() {
         image_ids: null,
       });
 
-      await attemptsApi.update(workspaceId, { archived: true });
+      await workspacesApi.update(workspaceId, { archived: true });
 
       appNavigation.goToWorkspace(newWorkspace.workspace.id);
     },

@@ -245,7 +245,7 @@ export function IssueWorkspacesSectionContainer({
   // Handle archiving a workspace
   const handleArchiveWorkspace = useCallback(
     async (localWorkspaceId: string) => {
-      await attemptsApi.update(localWorkspaceId, { archived: true });
+      await workspacesApi.update(localWorkspaceId, { archived: true });
     },
     []
   );
@@ -253,7 +253,7 @@ export function IssueWorkspacesSectionContainer({
   // Handle unarchiving a workspace
   const handleUnarchiveWorkspace = useCallback(
     async (localWorkspaceId: string) => {
-      await attemptsApi.update(localWorkspaceId, { archived: false });
+      await workspacesApi.update(localWorkspaceId, { archived: false });
     },
     []
   );

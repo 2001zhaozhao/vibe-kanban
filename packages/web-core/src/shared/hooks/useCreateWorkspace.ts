@@ -5,6 +5,10 @@ import { workspaceSummaryKeys } from '@/shared/hooks/workspaceSummaryKeys';
 
 interface CreateWorkspaceParams {
   data: CreateAndStartWorkspaceRequest;
+  linkToIssue?: {
+    remoteProjectId: string;
+    issueId: string;
+  };
 }
 
 export function useCreateWorkspace() {

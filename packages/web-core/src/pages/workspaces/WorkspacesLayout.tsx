@@ -14,7 +14,7 @@ import { usePageTitle } from '@/shared/hooks/usePageTitle';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
 import { useMobileActiveTab } from '@/shared/stores/useUiPreferencesStore';
 import { cn } from '@/shared/lib/utils';
-import { attemptsApi } from '@/shared/lib/api';
+import { workspacesApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useUserContext } from '@/shared/hooks/useUserContext';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
@@ -141,7 +141,7 @@ export function WorkspacesLayout() {
         ? `Implement the following plan that was approved by the user:\n\n${planText}`
         : 'Continue implementing the approved plan.';
 
-      const newWorkspace = await attemptsApi.createAndStart({
+      const newWorkspace = await workspacesApi.createAndStart({
         name: null,
         repos: repos.map((r) => ({
           repo_id: r.id,
@@ -163,7 +163,7 @@ export function WorkspacesLayout() {
         image_ids: null,
       });
 
-      await attemptsApi.update(workspaceId, { archived: true });
+      await workspacesApi.update(workspaceId, { archived: true });
 
       appNavigation.goToWorkspace(newWorkspace.workspace.id);
     },
