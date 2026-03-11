@@ -1,6 +1,6 @@
 import { forwardRef, createElement } from 'react';
 import type { Icon, IconProps } from '@phosphor-icons/react';
-import type { Merge, Workspace } from 'shared/types';
+import type { ExecutorConfig, Merge, Workspace } from 'shared/types';
 import type { QueryClient } from '@tanstack/react-query';
 import {
   CopyIcon,
@@ -51,9 +51,10 @@ import {
   RIGHT_MAIN_PANEL_MODES,
 } from '@/shared/stores/useUiPreferencesStore';
 
-import { attemptsApi, repoApi } from '@/shared/lib/api';
+import { workspacesApi, repoApi } from '@/shared/lib/api';
 import { bulkUpdateIssues } from '@/shared/lib/remoteApi';
-import { attemptKeys } from '@/shared/hooks/useAttempt';
+import { workspaceRecordKeys } from '@/shared/hooks/useWorkspaceRecord';
+import { workspaceRepoKeys } from '@/shared/hooks/useWorkspaceRepo';
 import { repoBranchKeys } from '@/shared/hooks/useRepoBranches';
 import { workspaceSummaryKeys } from '@/shared/hooks/workspaceSummaryKeys';
 import { ConfirmDialog } from '@vibe/ui/components/ConfirmDialog';
@@ -71,10 +72,8 @@ import posthog from 'posthog-js';
 import { WorkspacesGuideDialog } from '@/shared/dialogs/shared/WorkspacesGuideDialog';
 import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
 import { CreateWorkspaceFromPrDialog } from '@/shared/dialogs/command-bar/CreateWorkspaceFromPrDialog';
-import {
-  buildWorkspaceCreateInitialState,
-  persistWorkspaceCreateDraft,
-} from '@/shared/lib/workspaceCreateState';
+import { buildWorkspaceCreateInitialState } from '@/shared/lib/workspaceCreateState';
+import { setCreateModeSeedState } from '@/features/create-mode/model/createModeSeedStore';
 
 // Mirrored sidebar icon for right sidebar toggle
 const RightSidebarIcon: Icon = forwardRef<SVGSVGElement, IconProps>(
@@ -97,19 +96,35 @@ import type {
 } from '@/shared/types/actions';
 import { ActionTargetType, NavbarDivider } from '@/shared/types/actions';
 
-// Helper to get workspace from query cache or fetch from API
+async function resolveLinkedIssue(
+  workspaceId: string,
+  remoteWorkspaces: {
+    local_workspace_id: string | null;
+    issue_id: string | null;
+    project_id: string;
+  }[]
+): Promise<{ issueId: string; remoteProjectId: string } | undefined> {
+  const remoteWs = remoteWorkspaces.find(
+    (w) => w.local_workspace_id === workspaceId
+  );
+  if (remoteWs?.issue_id) {
+    return { issueId: remoteWs.issue_id, remoteProjectId: remoteWs.project_id };
+  }
+  return undefined;
+}
+
 async function getWorkspace(
   queryClient: QueryClient,
   workspaceId: string
 ): Promise<Workspace> {
   const cached = queryClient.getQueryData<Workspace>(
-    attemptKeys.byId(workspaceId)
+    workspaceRecordKeys.byId(workspaceId)
   );
   if (cached) {
     return cached;
   }
   // Fetch from API if not in cache
-  return attemptsApi.get(workspaceId);
+  return workspacesApi.get(workspaceId);
 }
 
 // Helper to invalidate workspace-related queries
@@ -117,7 +132,9 @@ function invalidateWorkspaceQueries(
   queryClient: QueryClient,
   workspaceId: string
 ) {
-  queryClient.invalidateQueries({ queryKey: attemptKeys.byId(workspaceId) });
+  queryClient.invalidateQueries({
+    queryKey: workspaceRecordKeys.byId(workspaceId),
+  });
   queryClient.invalidateQueries({ queryKey: workspaceSummaryKeys.all });
 }
 
@@ -163,21 +180,23 @@ export const Actions = {
     requiresTarget: ActionTargetType.WORKSPACE,
     execute: async (ctx, workspaceId) => {
       try {
-        const [firstMessage, repos] = await Promise.all([
-          attemptsApi.getFirstUserMessage(workspaceId),
-          attemptsApi.getRepos(workspaceId),
+        const [firstMessage, repos, workspaceWithSession] = await Promise.all([
+          workspacesApi.getFirstUserMessage(workspaceId),
+          workspacesApi.getRepos(workspaceId),
+          workspacesApi.getWithSession(workspaceId),
         ]);
 
-        // Find linked issue from remote workspace (synced via Electric)
-        const remoteWs = ctx.remoteWorkspaces.find(
-          (w) => w.local_workspace_id === workspaceId
+        const linkedIssue = await resolveLinkedIssue(
+          workspaceId,
+          ctx.remoteWorkspaces
         );
-        const linkedIssue = remoteWs?.issue_id
+
+        const executorConfig = workspaceWithSession.session?.executor
           ? {
-              issueId: remoteWs.issue_id,
-              remoteProjectId: remoteWs.project_id,
+              executor: workspaceWithSession.session
+                .executor as ExecutorConfig['executor'],
             }
-          : undefined;
+          : null;
 
         const createState = buildWorkspaceCreateInitialState({
           prompt: firstMessage,
@@ -188,21 +207,11 @@ export const Actions = {
             })),
           },
           linkedIssue,
+          executorConfig,
         });
-        const draftId = await persistWorkspaceCreateDraft(createState);
-        if (!draftId) {
-          await ConfirmDialog.show({
-            title: 'Error',
-            message: 'Failed to prepare workspace draft. Please try again.',
-            confirmText: 'OK',
-            showCancelButton: false,
-          });
-          return;
-        }
-
+        setCreateModeSeedState(createState);
         ctx.appNavigation.goToWorkspacesCreate();
       } catch {
-        // Fallback to creating without the prompt/repos
         ctx.appNavigation.goToWorkspacesCreate();
       }
     },
@@ -219,7 +228,7 @@ export const Actions = {
       await RenameWorkspaceDialog.show({
         currentName: workspace.name || workspace.branch,
         onRename: async (newName) => {
-          await attemptsApi.update(workspaceId, { name: newName });
+          await workspacesApi.update(workspaceId, { name: newName });
           invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
         },
       });
@@ -234,7 +243,7 @@ export const Actions = {
     requiresTarget: ActionTargetType.WORKSPACE,
     execute: async (ctx, workspaceId) => {
       const workspace = await getWorkspace(ctx.queryClient, workspaceId);
-      await attemptsApi.update(workspaceId, {
+      await workspacesApi.update(workspaceId, {
         pinned: !workspace.pinned,
       });
       invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
@@ -260,7 +269,7 @@ export const Actions = {
         : null;
 
       // Perform the archive/unarchive
-      await attemptsApi.update(workspaceId, { archived: !wasArchived });
+      await workspacesApi.update(workspaceId, { archived: !wasArchived });
       invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
 
       // Select next workspace after successful archive
@@ -287,7 +296,7 @@ export const Actions = {
       const linkedIssueSimpleId = remoteWs?.issue_id
         ? ctx.projectMutations?.getIssue(remoteWs.issue_id)?.simple_id
         : undefined;
-      const branchStatus = await attemptsApi.getBranchStatus(workspaceId);
+      const branchStatus = await workspacesApi.getBranchStatus(workspaceId);
       const hasOpenPR = branchStatus.some((repoStatus) =>
         repoStatus.merges?.some(
           (m: Merge) => m.type === 'pr' && m.pr_info.status === 'open'
@@ -307,11 +316,11 @@ export const Actions = {
           ? getNextWorkspaceId(ctx.activeWorkspaces, workspaceId)
           : null;
 
-        await attemptsApi.delete(workspaceId, result.deleteBranches);
+        await workspacesApi.delete(workspaceId, result.deleteBranches);
 
         // Unlink from remote issue after successful deletion
         if (result.unlinkFromIssue) {
-          await attemptsApi.unlinkFromIssue(workspaceId);
+          await workspacesApi.unlinkFromIssue(workspaceId);
         }
         ctx.queryClient.invalidateQueries({
           queryKey: workspaceSummaryKeys.all,
@@ -353,17 +362,12 @@ export const Actions = {
       try {
         const [workspace, repos] = await Promise.all([
           getWorkspace(ctx.queryClient, workspaceId),
-          attemptsApi.getRepos(workspaceId),
+          workspacesApi.getRepos(workspaceId),
         ]);
-        const remoteWs = ctx.remoteWorkspaces.find(
-          (w) => w.local_workspace_id === workspaceId
+        const linkedIssue = await resolveLinkedIssue(
+          workspaceId,
+          ctx.remoteWorkspaces
         );
-        const linkedIssue = remoteWs?.issue_id
-          ? {
-              issueId: remoteWs.issue_id,
-              remoteProjectId: remoteWs.project_id,
-            }
-          : undefined;
 
         const createState = buildWorkspaceCreateInitialState({
           prompt: null,
@@ -375,17 +379,7 @@ export const Actions = {
           },
           linkedIssue,
         });
-        const draftId = await persistWorkspaceCreateDraft(createState);
-        if (!draftId) {
-          await ConfirmDialog.show({
-            title: 'Error',
-            message: 'Failed to prepare workspace draft. Please try again.',
-            confirmText: 'OK',
-            showCancelButton: false,
-          });
-          return;
-        }
-
+        setCreateModeSeedState(createState);
         ctx.appNavigation.goToWorkspacesCreate();
       } catch {
         ctx.appNavigation.goToWorkspacesCreate();
@@ -749,10 +743,13 @@ export const Actions = {
     execute: async (ctx) => {
       if (!ctx.currentWorkspaceId) return;
       try {
-        const response = await attemptsApi.openEditor(ctx.currentWorkspaceId, {
-          editor_type: null,
-          file_path: null,
-        });
+        const response = await workspacesApi.openEditor(
+          ctx.currentWorkspaceId,
+          {
+            editor_type: null,
+            file_path: null,
+          }
+        );
         if (response.url) {
           window.open(response.url, '_blank');
         }
@@ -856,7 +853,7 @@ export const Actions = {
     execute: async (ctx, workspaceId, repoId) => {
       const workspace = await getWorkspace(ctx.queryClient, workspaceId);
 
-      const repos = await attemptsApi.getRepos(workspaceId);
+      const repos = await workspacesApi.getRepos(workspaceId);
       const repo = repos.find((r) => r.id === repoId);
 
       // Resolve vibe-kanban identifier from remote workspace + issue
@@ -889,7 +886,7 @@ export const Actions = {
     requiresTarget: ActionTargetType.GIT,
     isVisible: (ctx) => ctx.hasWorkspace && ctx.hasGitRepos && !ctx.hasOpenPR,
     execute: async (ctx, workspaceId, repoId) => {
-      const result = await attemptsApi.attachPr(workspaceId, {
+      const result = await workspacesApi.attachPr(workspaceId, {
         repo_id: repoId,
       });
 
@@ -930,7 +927,7 @@ export const Actions = {
     isVisible: (ctx) => ctx.hasWorkspace && ctx.hasGitRepos,
     execute: async (ctx, workspaceId, repoId) => {
       // Check for existing conflicts first
-      const branchStatus = await attemptsApi.getBranchStatus(workspaceId);
+      const branchStatus = await workspacesApi.getBranchStatus(workspaceId);
       const repoStatus = branchStatus?.find((s) => s.repo_id === repoId);
 
       // Check if repo has an open PR - cannot merge directly
@@ -991,7 +988,7 @@ export const Actions = {
         if (confirmRebase === 'confirmed') {
           // Open rebase dialog - it loads branches/status internally
           await RebaseDialog.show({
-            attemptId: workspaceId,
+            workspaceId: workspaceId,
             repoId,
           });
         }
@@ -1007,7 +1004,7 @@ export const Actions = {
       });
 
       if (confirmResult === 'confirmed') {
-        await attemptsApi.merge(workspaceId, { repo_id: repoId });
+        await workspacesApi.merge(workspaceId, { repo_id: repoId });
         invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
       }
     },
@@ -1023,7 +1020,7 @@ export const Actions = {
     execute: async (_ctx, workspaceId, repoId) => {
       // Open rebase dialog - it loads branches/status internally and handles conflicts
       await RebaseDialog.show({
-        attemptId: workspaceId,
+        workspaceId: workspaceId,
         repoId,
       });
     },
@@ -1043,7 +1040,7 @@ export const Actions = {
           isCurrent: branch.is_current,
         })),
         onChangeTargetBranch: async (newTargetBranch) => {
-          await attemptsApi.change_target_branch(workspaceId, {
+          await workspacesApi.change_target_branch(workspaceId, {
             new_target_branch: newTargetBranch,
             repo_id: repoId,
           });
@@ -1052,10 +1049,10 @@ export const Actions = {
             queryKey: ['branchStatus', workspaceId],
           });
           ctx.queryClient.invalidateQueries({
-            queryKey: attemptKeys.byId(workspaceId),
+            queryKey: workspaceRecordKeys.byId(workspaceId),
           });
           ctx.queryClient.invalidateQueries({
-            queryKey: ['attemptRepo', workspaceId],
+            queryKey: workspaceRepoKeys.byWorkspace(workspaceId),
           });
           ctx.queryClient.invalidateQueries({
             queryKey: repoBranchKeys.byRepo(repoId),
@@ -1077,7 +1074,7 @@ export const Actions = {
       ctx.hasOpenPR &&
       ctx.hasUnpushedCommits,
     execute: async (ctx, workspaceId, repoId) => {
-      const result = await attemptsApi.push(workspaceId, { repo_id: repoId });
+      const result = await workspacesApi.push(workspaceId, { repo_id: repoId });
       if (!result.success) {
         if (result.error?.type === 'force_push_required') {
           throw new Error(
@@ -1158,7 +1155,7 @@ export const Actions = {
     isVisible: (ctx) => ctx.hasWorkspace,
     isEnabled: (ctx) => !ctx.isAttemptRunning,
     execute: async (_ctx, workspaceId) => {
-      const result = await attemptsApi.runSetupScript(workspaceId);
+      const result = await workspacesApi.runSetupScript(workspaceId);
       if (!result.success) {
         if (result.error?.type === 'no_script_configured') {
           throw new Error('No setup script configured for this project');
@@ -1180,7 +1177,7 @@ export const Actions = {
     isVisible: (ctx) => ctx.hasWorkspace,
     isEnabled: (ctx) => !ctx.isAttemptRunning,
     execute: async (_ctx, workspaceId) => {
-      const result = await attemptsApi.runCleanupScript(workspaceId);
+      const result = await workspacesApi.runCleanupScript(workspaceId);
       if (!result.success) {
         if (result.error?.type === 'no_script_configured') {
           throw new Error('No cleanup script configured for this project');
@@ -1202,7 +1199,7 @@ export const Actions = {
     isVisible: (ctx) => ctx.hasWorkspace,
     isEnabled: (ctx) => !ctx.isAttemptRunning,
     execute: async (_ctx, workspaceId) => {
-      const result = await attemptsApi.runArchiveScript(workspaceId);
+      const result = await workspacesApi.runArchiveScript(workspaceId);
       if (!result.success) {
         if (result.error?.type === 'no_script_configured') {
           throw new Error('No archive script configured for this project');

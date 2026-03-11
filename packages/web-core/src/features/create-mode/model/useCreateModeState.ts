@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import type {
   DraftWorkspaceData,
   DraftWorkspaceImage,
@@ -15,7 +22,9 @@ import { useDebouncedCallback } from '@/shared/hooks/useDebouncedCallback';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { useShape } from '@/shared/integrations/electric/hooks';
 import { repoApi } from '@/shared/lib/api';
+import { resolveCreateModeBootstrap } from '@/features/create-mode/model/createModeBootstrap';
 import { useWorkspaceCreateDefaults } from '@/shared/hooks/useWorkspaceCreateDefaults';
+import { getValidProjectRepoDefaults } from '@/shared/hooks/useProjectRepoDefaults';
 import type {
   CreateModeInitialState,
   LinkedIssue,
@@ -245,7 +254,7 @@ export function useCreateModeState({
   localWorkspacesLoading,
   remoteWorkspacesLoading,
 }: UseCreateModeStateParams): UseCreateModeStateResult {
-  const { profiles } = useUserSystem();
+  const { profiles, config, loading: systemLoading } = useUserSystem();
   const scratchId = draftId ?? DRAFT_WORKSPACE_ID;
 
   const {
@@ -281,19 +290,45 @@ export function useCreateModeState({
   useEffect(() => {
     if (hasInitialized.current) return;
     if (scratchLoading) return;
+    if (systemLoading) return;
     if (!profiles) return;
 
     hasInitialized.current = true;
     const seedState = seedStateRef.current;
+    const scratchData: DraftWorkspaceData | undefined =
+      scratch?.payload?.type === 'DRAFT_WORKSPACE'
+        ? scratch.payload.data
+        : undefined;
 
-    // Determine initialization source and execute
-    initializeState({
+    void resolveCreateModeBootstrap({
       seedState,
-      scratch,
+      scratchData,
+      defaultExecutorConfig: config?.executor_profile
+        ? {
+            executor: config.executor_profile.executor,
+            variant: config.executor_profile.variant,
+          }
+        : null,
       isValidProfile,
-      dispatch,
-    });
-  }, [scratchLoading, profiles, scratch, isValidProfile]);
+    })
+      .then(({ data }) => {
+        dispatch({ type: 'INIT_COMPLETE', data });
+      })
+      .catch((e) => {
+        console.error('[useCreateModeState] Initialization failed:', e);
+        dispatch({
+          type: 'INIT_ERROR',
+          error: e instanceof Error ? e.message : 'Failed to initialize',
+        });
+      });
+  }, [
+    scratchLoading,
+    systemLoading,
+    profiles,
+    config?.executor_profile,
+    scratch,
+    isValidProfile,
+  ]);
 
   // ============================================================================
   // Auto-select project when none selected
@@ -301,6 +336,9 @@ export function useCreateModeState({
   const hasAttemptedAutoSelect = useRef(false);
   const repoDefaultsSourceRef = useRef<string | null>(null);
   const hasAppliedRepoDefaultsRef = useRef(false);
+  const [projectDefaultsStatus, setProjectDefaultsStatus] = useState<
+    'pending' | 'applied' | 'empty' | 'n/a'
+  >('pending');
   const sourceWorkspaceId = useMemo(() => {
     if (state.linkedIssue) {
       const linkedIssueWorkspaceId = getLatestWorkspaceIdForRemoteProject({
@@ -341,6 +379,14 @@ export function useCreateModeState({
     hasAttemptedAutoSelect.current = true;
   }, [state.phase]);
 
+  // When no linked issue with a project, mark project defaults as not applicable
+  useEffect(() => {
+    if (state.phase !== 'ready') return;
+    if (!state.linkedIssue?.remoteProjectId) {
+      setProjectDefaultsStatus('n/a');
+    }
+  }, [state.phase, state.linkedIssue?.remoteProjectId]);
+
   // ============================================================================
   // Auto-apply repos/branches defaults for fresh drafts
   // ============================================================================
@@ -350,9 +396,22 @@ export function useCreateModeState({
     hasAppliedRepoDefaultsRef.current = false;
   }, [sourceWorkspaceId]);
 
+  // When project defaults resolve as empty, allow Effect A to fire as fallback
+  useEffect(() => {
+    if (projectDefaultsStatus === 'empty') {
+      hasAppliedRepoDefaultsRef.current = false;
+    }
+  }, [projectDefaultsStatus]);
+
   useEffect(() => {
     if (!shouldLoadWorkspaceDefaults) return;
     if (!hasResolvedPreferredRepos) return;
+    // When a project is linked, wait for project defaults to resolve first
+    if (
+      state.linkedIssue?.remoteProjectId &&
+      projectDefaultsStatus === 'pending'
+    )
+      return;
     if (hasAppliedRepoDefaultsRef.current) return;
 
     hasAppliedRepoDefaultsRef.current = true;
@@ -371,7 +430,67 @@ export function useCreateModeState({
     hasResolvedPreferredRepos,
     state.repos.length,
     preferredRepos,
+    projectDefaultsStatus,
+    state.linkedIssue?.remoteProjectId,
   ]);
+
+  // ============================================================================
+  // Scratch project-repo defaults (async, non-blocking)
+  // ============================================================================
+  const scratchDefaultsProjectRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const remoteProjectId = state.linkedIssue?.remoteProjectId;
+    if (!remoteProjectId) return;
+    if (state.repos.length > 0) return;
+    if (scratchDefaultsProjectRef.current === remoteProjectId) return;
+
+    scratchDefaultsProjectRef.current = remoteProjectId;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const allRepos = await repoApi.list();
+        if (cancelled) return;
+
+        const availableRepoIds = new Set(allRepos.map((r) => r.id));
+        const scratchDefaults = await getValidProjectRepoDefaults(
+          remoteProjectId,
+          availableRepoIds
+        );
+        if (cancelled) return;
+
+        if (scratchDefaults.length === 0) {
+          setProjectDefaultsStatus('empty');
+          return;
+        }
+
+        const reposById = new Map(allRepos.map((r) => [r.id, r]));
+        const selectedRepos = scratchDefaults.flatMap((d) => {
+          const repo = reposById.get(d.repo_id);
+          if (!repo) return [];
+          return [{ repo, targetBranch: d.target_branch || null }];
+        });
+
+        if (selectedRepos.length > 0) {
+          dispatch({ type: 'SET_REPOS_IF_EMPTY', repos: selectedRepos });
+          setProjectDefaultsStatus('applied');
+        } else {
+          setProjectDefaultsStatus('empty');
+        }
+      } catch (err) {
+        console.warn(
+          '[useCreateModeState] Scratch defaults lookup failed:',
+          err
+        );
+        setProjectDefaultsStatus('empty');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.linkedIssue?.remoteProjectId, state.repos.length]);
 
   // ============================================================================
   // Persistence to scratch (debounced)
@@ -537,169 +656,4 @@ export function useCreateModeState({
     images: state.images,
     setImages,
   };
-}
-
-// ============================================================================
-// Initialization helper (pure-ish function for testability)
-// ============================================================================
-
-interface InitializeParams {
-  seedState: CreateModeInitialState | null;
-  scratch: ReturnType<typeof useScratch>['scratch'];
-  isValidProfile: (config: ExecutorConfig | null) => boolean;
-  dispatch: React.Dispatch<DraftAction>;
-}
-
-async function resolveNavPreferredRepos(
-  preferredRepos: NonNullable<CreateModeInitialState['preferredRepos']>
-): Promise<SelectedRepo[]> {
-  const reposById = new Map<string, Repo>();
-
-  const missingRepoIds = preferredRepos
-    .map((r) => r.repo_id)
-    .filter((repoId) => !reposById.has(repoId));
-
-  if (missingRepoIds.length > 0) {
-    const fetchedRepos = await Promise.all(
-      missingRepoIds.map(async (repoId) => {
-        try {
-          return await repoApi.getById(repoId);
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    for (const repo of fetchedRepos) {
-      if (repo) {
-        reposById.set(repo.id, repo);
-      }
-    }
-  }
-
-  return preferredRepos.flatMap((preferredRepo) => {
-    const repo = reposById.get(preferredRepo.repo_id);
-    if (!repo) return [];
-
-    return [
-      {
-        repo,
-        targetBranch: preferredRepo.target_branch || null,
-      },
-    ];
-  });
-}
-
-async function initializeState({
-  seedState,
-  scratch,
-  isValidProfile,
-  dispatch,
-}: InitializeParams): Promise<void> {
-  try {
-    // Priority 1: Explicitly provided seed state
-    const hasInitialPrompt = !!seedState?.initialPrompt;
-    const hasLinkedIssue = !!seedState?.linkedIssue;
-    const hasPreferredRepos = (seedState?.preferredRepos?.length ?? 0) > 0;
-
-    if (hasInitialPrompt || hasLinkedIssue || hasPreferredRepos) {
-      const data: Partial<DraftState> = {};
-      let appliedSeedState = false;
-
-      // Handle initial prompt
-      if (hasInitialPrompt) {
-        data.message = seedState!.initialPrompt!;
-        appliedSeedState = true;
-      }
-
-      // Handle linked issue
-      if (hasLinkedIssue) {
-        data.linkedIssue = seedState!.linkedIssue!;
-        appliedSeedState = true;
-      }
-
-      // Handle preferred repos + target branches (e.g., from duplicate/spin-off)
-      if (seedState?.preferredRepos && seedState.preferredRepos.length > 0) {
-        const resolvedRepos = await resolveNavPreferredRepos(
-          seedState.preferredRepos
-        );
-        if (resolvedRepos.length > 0) {
-          data.repos = resolvedRepos;
-          appliedSeedState = true;
-        }
-      }
-
-      if (appliedSeedState) {
-        dispatch({ type: 'INIT_COMPLETE', data });
-        return;
-      }
-    }
-
-    // Priority 2: Restore from scratch
-    const scratchData: DraftWorkspaceData | undefined =
-      scratch?.payload?.type === 'DRAFT_WORKSPACE'
-        ? scratch.payload.data
-        : undefined;
-
-    if (scratchData) {
-      const restoredData: Partial<DraftState> = {};
-
-      // Restore message
-      if (scratchData.message) {
-        restoredData.message = scratchData.message;
-      }
-
-      // Restore executor config if profile is still valid
-      if (
-        scratchData.executor_config &&
-        isValidProfile(scratchData.executor_config)
-      ) {
-        restoredData.executorConfig = scratchData.executor_config;
-      }
-
-      // Restore linked issue
-      if (scratchData.linked_issue) {
-        restoredData.linkedIssue = {
-          issueId: scratchData.linked_issue.issue_id,
-          simpleId: scratchData.linked_issue.simple_id || undefined,
-          title: scratchData.linked_issue.title || undefined,
-          remoteProjectId: scratchData.linked_issue.remote_project_id,
-        };
-      }
-
-      // Restore uploaded images
-      if (scratchData.images?.length > 0) {
-        restoredData.images = scratchData.images;
-      }
-
-      // Restore repos + branches from scratch draft (e.g., spin-off/duplicate)
-      if (scratchData.repos?.length > 0) {
-        const restoredRepos = await resolveNavPreferredRepos(
-          scratchData.repos.map((repo) => ({
-            repo_id: repo.repo_id,
-            target_branch: repo.target_branch || null,
-          }))
-        );
-
-        if (restoredRepos.length > 0) {
-          restoredData.repos = restoredRepos;
-        }
-      }
-
-      dispatch({ type: 'INIT_COMPLETE', data: restoredData });
-      return;
-    }
-
-    // Priority 3: Fresh start
-    dispatch({
-      type: 'INIT_COMPLETE',
-      data: {},
-    });
-  } catch (e) {
-    console.error('[useCreateModeState] Initialization failed:', e);
-    dispatch({
-      type: 'INIT_ERROR',
-      error: e instanceof Error ? e.message : 'Failed to initialize',
-    });
-  }
 }

@@ -1,10 +1,4 @@
-use axum::{
-    Json, Router,
-    extract::State,
-    http::header::HeaderName,
-    middleware,
-    routing::get,
-};
+use axum::{Json, Router, extract::State, http::header::HeaderName, middleware, routing::get};
 use serde::Serialize;
 use tower_http::{
     cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer},
@@ -30,9 +24,9 @@ mod billing {
         Router::new()
     }
 }
+pub mod attachments;
 pub(crate) mod electric_proxy;
 pub(crate) mod error;
-pub mod attachments;
 mod github_app;
 pub mod hosts;
 mod identity;
@@ -56,7 +50,6 @@ pub mod tags;
 mod single_user;
 mod tokens;
 mod workspaces;
-
 
 pub fn router(state: AppState) -> Router {
     let trace_layer = TraceLayer::new_for_http()

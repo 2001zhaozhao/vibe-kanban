@@ -56,6 +56,7 @@ import {
   patchKanbanIssueComposer,
   resetKanbanIssueComposer,
   useKanbanIssueComposer,
+  useKanbanIssueComposerStore,
 } from '@/shared/stores/useKanbanIssueComposerStore';
 
 interface KanbanIssuePanelContainerProps {
@@ -463,13 +464,46 @@ export function KanbanIssuePanelContainer({
     // Cancel any pending debounced saves when switching issues
     cancelDebouncedTitle();
     cancelDebouncedDescription();
-    const nextCreateFormData = mode === 'create' ? createModeDefaults : null;
+
+    let nextCreateFormData: IssueFormData | null = null;
+    let restoredFromScratch = false;
+
+    if (mode === 'create') {
+      // Check if the composer store has a saved draft (e.g., restored from
+      // localStorage on remote-web). Use it to seed the form instead of defaults.
+      const composerDraft =
+        useKanbanIssueComposerStore.getState().byKey[issueComposerKey]?.draft;
+      const hasSavedDraft =
+        composerDraft != null &&
+        (composerDraft.title !== '' || composerDraft.description != null);
+
+      if (hasSavedDraft) {
+        nextCreateFormData = {
+          title: composerDraft.title,
+          description: composerDraft.description ?? null,
+          statusId: composerDraft.statusId ?? createModeDefaults.statusId,
+          priority:
+            composerDraft.priority === undefined
+              ? createModeDefaults.priority
+              : composerDraft.priority,
+          assigneeIds:
+            composerDraft.assigneeIds ?? createModeDefaults.assigneeIds,
+          tagIds: composerDraft.tagIds ?? createModeDefaults.tagIds,
+          createDraftWorkspace:
+            composerDraft.createDraftWorkspace ??
+            createModeDefaults.createDraftWorkspace,
+        };
+        restoredFromScratch = true;
+      } else {
+        nextCreateFormData = createModeDefaults;
+      }
+    }
 
     dispatchFormState({
       type: 'resetForIssueChange',
       mode,
       createFormData: nextCreateFormData,
-      hasRestoredFromScratch: false,
+      hasRestoredFromScratch: restoredFromScratch,
     });
   }, [
     mode,
@@ -478,6 +512,7 @@ export function KanbanIssuePanelContainer({
     cancelDebouncedTitle,
     cancelDebouncedDescription,
     createModeDefaults,
+    issueComposerKey,
   ]);
 
   // Form change handler - persists changes immediately in edit mode
@@ -726,7 +761,8 @@ export function KanbanIssuePanelContainer({
           // Get defaults from most recent workspace
           const defaults = await getWorkspaceDefaults(
             workspaces,
-            localWorkspaceIds
+            localWorkspaceIds,
+            projectId
           );
 
           const createState = buildWorkspaceCreateInitialState({

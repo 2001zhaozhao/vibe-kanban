@@ -1,8 +1,17 @@
-import { useMemo, useCallback, useState, useRef, type Ref } from 'react';
+import {
+  useMemo,
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+  type Ref,
+} from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
 import { IssueProvider } from '@/integrations/remote/IssueProvider';
 import { useIssueContext } from '@/shared/hooks/useIssueContext';
+import { useScratch } from '@/shared/hooks/useScratch';
+import { useDebouncedCallback } from '@/shared/hooks/useDebouncedCallback';
 import { useOrgContext } from '@/shared/hooks/useOrgContext';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
 import { useCurrentUser } from '@/shared/hooks/auth/useCurrentUser';
@@ -22,6 +31,7 @@ import WYSIWYGEditor, {
   type WYSIWYGEditorRef,
 } from '@/shared/components/WYSIWYGEditor';
 import { MemberRole } from 'shared/remote-types';
+import { ScratchType } from 'shared/types';
 
 interface IssueCommentsSectionContainerProps {
   issueId: string;
@@ -60,6 +70,74 @@ function IssueCommentsSectionContent() {
 
   // UI state for comment input
   const [commentInput, setCommentInput] = useState('');
+  const commentDraftId = `issue-comment:${issueContext.issueId}`;
+  const {
+    scratch: commentDraftScratch,
+    updateScratch: updateCommentDraft,
+    deleteScratch: deleteCommentDraft,
+    isLoading: isCommentDraftLoading,
+  } = useScratch(ScratchType.DRAFT_TASK, commentDraftId);
+  const commentDraft =
+    commentDraftScratch?.payload?.type === 'DRAFT_TASK'
+      ? commentDraftScratch.payload.data
+      : undefined;
+  const hydratedCommentDraftIdRef = useRef<string | null>(null);
+  const skipNextPersistRef = useRef(false);
+
+  const persistCommentDraft = useCallback(
+    async (value: string) => {
+      try {
+        if (!value.trim()) {
+          await deleteCommentDraft();
+          return;
+        }
+
+        await updateCommentDraft({
+          payload: {
+            type: 'DRAFT_TASK',
+            data: value,
+          },
+        });
+      } catch (e) {
+        console.error('[IssueCommentsSection] Failed to persist draft:', e);
+      }
+    },
+    [updateCommentDraft, deleteCommentDraft]
+  );
+
+  const {
+    debounced: debouncedPersistCommentDraft,
+    cancel: cancelDebouncedPersistCommentDraft,
+  } = useDebouncedCallback(persistCommentDraft, 500);
+
+  useEffect(() => {
+    cancelDebouncedPersistCommentDraft();
+    hydratedCommentDraftIdRef.current = null;
+    skipNextPersistRef.current = false;
+    setCommentInput('');
+  }, [commentDraftId, cancelDebouncedPersistCommentDraft]);
+
+  useEffect(() => {
+    if (isCommentDraftLoading) return;
+    if (hydratedCommentDraftIdRef.current === commentDraftId) return;
+
+    const nextCommentInput = commentDraft ?? '';
+    const shouldSkipNextPersist = nextCommentInput !== commentInput;
+
+    hydratedCommentDraftIdRef.current = commentDraftId;
+    skipNextPersistRef.current = shouldSkipNextPersist;
+    setCommentInput(nextCommentInput);
+  }, [isCommentDraftLoading, commentDraft, commentDraftId, commentInput]);
+
+  useEffect(() => {
+    if (hydratedCommentDraftIdRef.current !== commentDraftId) return;
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+
+    debouncedPersistCommentDraft(commentInput);
+  }, [commentInput, commentDraftId, debouncedPersistCommentDraft]);
 
   const handleCommentMarkdownInsert = useCallback((markdown: string) => {
     setCommentInput((prev) =>
@@ -204,7 +282,13 @@ function IssueCommentsSectionContent() {
       message,
       parent_id: null,
     });
+    cancelDebouncedPersistCommentDraft();
     setCommentInput('');
+    try {
+      await deleteCommentDraft();
+    } catch (e) {
+      console.error('[IssueCommentsSection] Failed to clear draft:', e);
+    }
 
     const allUploadedIds = getAttachmentIds();
     if (allUploadedIds.length > 0) {
@@ -229,7 +313,14 @@ function IssueCommentsSectionContent() {
       }
     }
     clearAttachments();
-  }, [commentInput, issueContext, getAttachmentIds, clearAttachments]);
+  }, [
+    commentInput,
+    issueContext,
+    getAttachmentIds,
+    clearAttachments,
+    cancelDebouncedPersistCommentDraft,
+    deleteCommentDraft,
+  ]);
 
   const handleStartEdit = useCallback(
     (commentId: string) => {

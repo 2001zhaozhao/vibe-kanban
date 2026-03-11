@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group, Layout, Panel, Separator } from 'react-resizable-panels';
+import type { CreateModeInitialState } from '@/shared/types/createMode';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { usePageTitle } from '@/shared/hooks/usePageTitle';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
@@ -11,7 +19,12 @@ import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useUserContext } from '@/shared/hooks/useUserContext';
 import { useExecutionProcesses } from '@/shared/hooks/useExecutionProcesses';
 import { getLatestConfigFromProcesses } from '@/shared/lib/executor';
-import { CreateModeProvider } from '@/integrations/CreateModeProvider';
+import { CreateModeProvider } from '@/features/create-mode/model/CreateModeProvider';
+import {
+  consumeCreateModeSeedState,
+  getCreateModeSeedVersion,
+  subscribeCreateModeSeedState,
+} from '@/features/create-mode/model/createModeSeedStore';
 import { ReviewProvider } from '@/shared/hooks/ReviewProvider';
 import { ChangesViewProvider } from '@/shared/hooks/ChangesViewProvider';
 import { WorkspacesSidebarContainer } from './WorkspacesSidebarContainer';
@@ -32,11 +45,9 @@ import {
   PERSIST_KEYS,
   usePaneSize,
   useWorkspacePanelState,
-  useUiPreferencesStore,
   RIGHT_MAIN_PANEL_MODES,
 } from '@/shared/stores/useUiPreferencesStore';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
-import { WorkspacesSidebarReopenTag } from '@vibe/ui/components/WorkspacesSidebar';
 
 const WORKSPACES_GUIDE_ID = 'workspaces-guide';
 
@@ -59,6 +70,47 @@ export function WorkspacesLayout() {
   usePageTitle(
     isCreateMode ? t('workspaces.newWorkspace') : selectedWorkspace?.name
   );
+
+  const seedVersion = useSyncExternalStore(
+    subscribeCreateModeSeedState,
+    getCreateModeSeedVersion,
+    getCreateModeSeedVersion
+  );
+  const consumedSeedVersionRef = useRef(0);
+  const [createModeSeed, setCreateModeSeed] = useState<{
+    version: number;
+    state: CreateModeInitialState | null;
+  }>({
+    version: 0,
+    state: null,
+  });
+
+  useEffect(() => {
+    if (!isCreateMode) {
+      consumedSeedVersionRef.current = 0;
+      setCreateModeSeed((current) =>
+        current.version === 0 && current.state === null
+          ? current
+          : { version: 0, state: null }
+      );
+      return;
+    }
+
+    if (seedVersion === 0 || seedVersion === consumedSeedVersionRef.current) {
+      return;
+    }
+
+    consumedSeedVersionRef.current = seedVersion;
+    setCreateModeSeed({
+      version: seedVersion,
+      state: consumeCreateModeSeedState(),
+    });
+  }, [isCreateMode, seedVersion]);
+
+  const createModeProviderKey =
+    createModeSeed.version > 0
+      ? `create-mode-seed-${createModeSeed.version}`
+      : 'create-mode-seed-default';
 
   // Linked issue from user context (always available, unlike project context)
   const userCtx = useUserContext();
@@ -126,12 +178,7 @@ export function WorkspacesLayout() {
 
   const isMobile = useIsMobile();
   const [mobileTab] = useMobileActiveTab();
-  const isAppBarHovered = useUiPreferencesStore((s) => s.isAppBarHovered);
   const mainContainerRef = useRef<WorkspacesMainContainerHandle>(null);
-  const [isSidebarHandleHovered, setIsSidebarHandleHovered] = useState(false);
-  const [isSidebarPreviewHovered, setIsSidebarPreviewHovered] = useState(false);
-  const isSidebarHoverPreviewOpen =
-    isSidebarHandleHovered || isSidebarPreviewHovered || isAppBarHovered;
 
   const handleScrollToBottom = useCallback(() => {
     mainContainerRef.current?.scrollToBottom();
@@ -213,7 +260,7 @@ export function WorkspacesLayout() {
   // WebSocket connections and scroll positions across tab switches.
   if (isMobile) {
     const mobileContent = (
-      <ReviewProvider attemptId={selectedWorkspace?.id}>
+      <ReviewProvider workspaceId={selectedWorkspace?.id}>
         <ChangesViewProvider>
           <div className="flex flex-col h-full min-h-0">
             {/* Workspaces tab */}
@@ -264,7 +311,7 @@ export function WorkspacesLayout() {
               {selectedWorkspace?.id && (
                 <ChangesPanelContainer
                   className=""
-                  attemptId={selectedWorkspace.id}
+                  workspaceId={selectedWorkspace.id}
                 />
               )}
             </div>
@@ -288,7 +335,7 @@ export function WorkspacesLayout() {
             >
               {selectedWorkspace?.id && (
                 <PreviewBrowserContainer
-                  attemptId={selectedWorkspace.id}
+                  workspaceId={selectedWorkspace.id}
                   className=""
                 />
               )}
@@ -326,7 +373,12 @@ export function WorkspacesLayout() {
       <div className="flex flex-1 min-h-0 h-full">
         <div className="flex-1 min-w-0 h-full">
           {isCreateMode ? (
-            <CreateModeProvider>{mobileContent}</CreateModeProvider>
+            <CreateModeProvider
+              key={createModeProviderKey}
+              initialState={createModeSeed.state}
+            >
+              {mobileContent}
+            </CreateModeProvider>
           ) : (
             mobileContent
           )}
@@ -336,7 +388,7 @@ export function WorkspacesLayout() {
   }
 
   const mainContent = (
-    <ReviewProvider attemptId={selectedWorkspace?.id}>
+    <ReviewProvider workspaceId={selectedWorkspace?.id}>
       <ChangesViewProvider>
         <div className="flex h-full">
           <Group
@@ -390,7 +442,7 @@ export function WorkspacesLayout() {
                   selectedWorkspace?.id && (
                     <ChangesPanelContainer
                       className=""
-                      attemptId={selectedWorkspace.id}
+                      workspaceId={selectedWorkspace.id}
                     />
                   )}
                 {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.LOGS && (
@@ -399,7 +451,7 @@ export function WorkspacesLayout() {
                 {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW &&
                   selectedWorkspace?.id && (
                     <PreviewBrowserContainer
-                      attemptId={selectedWorkspace.id}
+                      workspaceId={selectedWorkspace.id}
                       className=""
                     />
                   )}
@@ -430,46 +482,21 @@ export function WorkspacesLayout() {
   );
 
   return (
-    <div className="relative flex flex-1 min-h-0 h-full">
+    <div className="flex flex-1 min-h-0 h-full">
       {isLeftSidebarVisible && (
         <div className="w-[300px] shrink-0 h-full overflow-hidden">
           <WorkspacesSidebarContainer onScrollToBottom={handleScrollToBottom} />
         </div>
       )}
 
-      {!isLeftSidebarVisible && (
-        <div className="absolute inset-y-0 left-0 z-20 flex items-center">
-          <WorkspacesSidebarReopenTag
-            active={isSidebarHoverPreviewOpen}
-            onHoverStart={() => setIsSidebarHandleHovered(true)}
-            onHoverEnd={() => setIsSidebarHandleHovered(false)}
-            ariaLabel={t('workspaces.title')}
-          />
-        </div>
-      )}
-
-      {!isLeftSidebarVisible && (
-        <div
-          className={cn(
-            'absolute left-0 top-0 z-30 h-full w-[300px] transition-transform duration-150 ease-out',
-            isSidebarHoverPreviewOpen
-              ? 'translate-x-0 pointer-events-auto'
-              : '-translate-x-full pointer-events-none'
-          )}
-          onMouseEnter={() => setIsSidebarPreviewHovered(true)}
-          onMouseLeave={() => setIsSidebarPreviewHovered(false)}
-        >
-          <div className="h-full w-full overflow-hidden border-r border-border bg-secondary shadow-lg">
-            <WorkspacesSidebarContainer
-              onScrollToBottom={handleScrollToBottom}
-            />
-          </div>
-        </div>
-      )}
-
       <div className="flex-1 min-w-0 h-full">
         {isCreateMode ? (
-          <CreateModeProvider>{mainContent}</CreateModeProvider>
+          <CreateModeProvider
+            key={createModeProviderKey}
+            initialState={createModeSeed.state}
+          >
+            {mainContent}
+          </CreateModeProvider>
         ) : (
           mainContent
         )}

@@ -15,9 +15,9 @@ import { ExecutionProcessesProvider } from '@/shared/providers/ExecutionProcesse
 import { ApprovalFeedbackProvider } from '@/features/workspace-chat/model/contexts/ApprovalFeedbackContext';
 import { EntriesProvider } from '@/features/workspace-chat/model/contexts/EntriesContext';
 import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/MessageEditContext';
-import { CreateModeProvider } from '@/integrations/CreateModeProvider';
+import { CreateModeProvider } from '@/features/create-mode/model/CreateModeProvider';
 import { useWorkspaceSessions } from '@/shared/hooks/useWorkspaceSessions';
-import { useAttempt } from '@/shared/hooks/useAttempt';
+import { useWorkspaceRecord } from '@/shared/hooks/useWorkspaceRecord';
 import { attemptsApi } from '@/shared/lib/api';
 import { BaseCodingAgent, PermissionPolicy } from 'shared/types';
 import { useAttemptRepo } from '@/shared/hooks/useAttemptRepo';
@@ -151,7 +151,7 @@ function WorkspaceSessionPanel({
   const { activeWorkspaces, archivedWorkspaces } = useWorkspaceContext();
   const conversationListRef = useRef<ConversationListHandle>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const { data: workspace, isLoading: isWorkspaceLoading } = useAttempt(
+  const { data: workspace, isLoading: isWorkspaceLoading } = useWorkspaceRecord(
     workspaceId,
     { enabled: !!workspaceId }
   );
@@ -338,7 +338,7 @@ function WorkspaceSessionPanel({
               {workspaceWithSession ? (
                 <div className="flex flex-1 min-h-0 overflow-hidden justify-center">
                   <div className="w-chat max-w-full h-full">
-                    <RetryUiProvider attemptId={workspaceWithSession.id}>
+                    <RetryUiProvider workspaceId={workspaceWithSession.id}>
                       <ConversationList
                         ref={conversationListRef}
                         attempt={workspaceWithSession}
@@ -511,6 +511,10 @@ export function ProjectRightSidebarContainer() {
   ]);
 
   const rightPanelState = useMemo<RightPanelState>(() => {
+    if (isCreateMode) {
+      return { kind: 'create-issue' };
+    }
+
     if (isWorkspaceCreateMode) {
       if (draftId) {
         return {
@@ -524,10 +528,6 @@ export function ProjectRightSidebarContainer() {
 
     if (workspaceId) {
       return { kind: 'issue-workspace', workspaceId };
-    }
-
-    if (isCreateMode) {
-      return { kind: 'create-issue' };
     }
 
     if (issueId) {

@@ -10,8 +10,8 @@ import {
   PermissionPolicy,
 } from 'shared/types';
 import { AgentIcon } from '@/shared/components/AgentIcon';
-import { useAttemptExecution } from '@/shared/hooks/useAttemptExecution';
-import { useAttemptRepo } from '@/shared/hooks/useAttemptRepo';
+import { useWorkspaceExecution } from '@/shared/hooks/useWorkspaceExecution';
+import { useWorkspaceRepo } from '@/shared/hooks/useWorkspaceRepo';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import WYSIWYGEditor from '@/shared/components/WYSIWYGEditor';
 import { useApprovalFeedbackOptional } from '../model/contexts/ApprovalFeedbackContext';
@@ -29,7 +29,7 @@ import { useSessionSend } from '../model/hooks/useSessionSend';
 import { useSessionAttachments } from '../model/hooks/useSessionAttachments';
 import { useMessageEditRetry } from '../model/hooks/useMessageEditRetry';
 import { useBranchStatus } from '@/shared/hooks/useBranchStatus';
-import { useAttemptBranch } from '../model/hooks/useAttemptBranch';
+import { useWorkspaceBranch } from '../model/hooks/useWorkspaceBranch';
 import { useApprovalMutation } from '../model/hooks/useApprovalMutation';
 import { useApprovals } from '@/shared/hooks/useApprovals';
 import { ResolveConflictsDialog } from '@/shared/dialogs/tasks/ResolveConflictsDialog';
@@ -190,7 +190,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
 
   // Execution state
   const { isAttemptRunning, stopExecution, isStopping, processes } =
-    useAttemptExecution(workspaceId);
+    useWorkspaceExecution(workspaceId);
 
   // Approvals state
   const { getPendingForProcess } = useApprovals();
@@ -257,7 +257,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
   }, [pendingApproval?.approvalId, isNewSessionMode, workspaceId, sessionId]);
 
   // Get repos for file search
-  const { repos } = useAttemptRepo(workspaceId);
+  const { repos } = useWorkspaceRepo(workspaceId);
   const repoIds = repos.map((r) => r.id);
 
   // Approval feedback context
@@ -311,7 +311,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
   }, [branchStatus]);
 
   // Get workspace branch for conflict resolution dialog
-  const { branch: attemptBranch } = useAttemptBranch(workspaceId);
+  const { branch: attemptBranch } = useWorkspaceBranch(workspaceId);
 
   // Find the first repo with conflicts (for the resolve dialog)
   const repoWithConflicts = useMemo(
@@ -418,26 +418,6 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
 
   const { uploadFiles, localImages, clearUploadedImages } =
     useSessionAttachments(workspaceId, sessionId, handleInsertMarkdown);
-
-  const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      const imageFiles = acceptedFiles.filter((f) =>
-        f.type.startsWith('image/')
-      );
-      if (imageFiles.length > 0) {
-        uploadFiles(imageFiles);
-      }
-    },
-    [uploadFiles]
-  );
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': [] },
-    disabled: mode === 'placeholder' || isAttemptRunning,
-    noClick: true,
-    noKeyboard: true,
-  });
 
   // Unified executor + variant + model selector options resolution
   const {
@@ -639,6 +619,37 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     setLocalMessage('');
   });
 
+  const areAttachmentInputsDisabled =
+    mode === 'placeholder' ||
+    isQueued ||
+    isSending ||
+    isStopping ||
+    !!feedbackContext?.isSubmitting ||
+    editRetryMutation.isPending ||
+    isApproving ||
+    isDenying ||
+    isAnswering;
+
+  const onDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const imageFiles = acceptedFiles.filter((f) =>
+        f.type.startsWith('image/')
+      );
+      if (imageFiles.length > 0) {
+        uploadFiles(imageFiles);
+      }
+    },
+    [uploadFiles]
+  );
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    disabled: areAttachmentInputsDisabled,
+    noClick: true,
+    noKeyboard: true,
+  });
+
   // Handle edit submission
   const handleSubmitEdit = useCallback(async () => {
     if (!editContext.activeEdit || !localMessage.trim() || !executorConfig)
@@ -682,7 +693,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     if (!repoId) return;
 
     const result = await PrCommentsDialog.show({
-      attemptId: workspaceId,
+      workspaceId: workspaceId,
       repoId,
     });
     if (result.comments.length > 0) {

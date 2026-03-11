@@ -61,7 +61,7 @@
         "executor": {
           "label": "Default Agent Configuration",
           "placeholder": "Select profile",
-          "helper": "Choose the default agent configuration to use when creating a task attempt."
+          "helper": "Choose the default agent configuration to use when creating a workspace."
         },
         "variant": "DEFAULT",
         "defaultLabel": "Default"
@@ -177,7 +177,7 @@
       },
       "commits": {
         "title": "Commits",
-        "description": "Configure commit behavior for task attempts",
+        "description": "Configure commit behavior for workspaces",
         "reminder": {
           "label": "Commit reminder",
           "helper": "Prompt supported agents to commit changes before stopping."
@@ -192,14 +192,14 @@
         "description": "Control when and how you receive notifications.",
         "sound": {
           "label": "Sound Notifications",
-          "helper": "Play a sound when task attempts finish running.",
+          "helper": "Play a sound when workspaces finish running.",
           "fileLabel": "Sound",
           "filePlaceholder": "Select sound",
           "fileHelper": "Choose the sound to play when tasks complete. Click the volume button to preview."
         },
         "push": {
           "label": "Push Notifications",
-          "helper": "Show system notifications when task attempts finish running."
+          "helper": "Show system notifications when workspaces finish running."
         }
       },
       "messageInput": {
@@ -285,7 +285,7 @@
         "description": "Try out experimental features before they're released.",
         "workspaces": {
           "label": "Enable Workspaces Beta",
-          "helper": "Use the new workspaces interface when viewing task attempts. Tasks will open in task view first, and attempts will open in the new workspaces view."
+          "helper": "Use the new workspaces interface when viewing workspaces. Tasks will open in task view first, and attempts will open in the new workspaces view."
         }
       }
     },
@@ -428,6 +428,12 @@
       "description": "Configure scripts that run when this repository is used in workspaces.",
       "loading": "Loading repositories...",
       "loadError": "Failed to load repositories.",
+      "addRepo": {
+        "button": "Add Repository",
+        "dialogTitle": "Select Git Repository",
+        "dialogDescription": "Choose an existing git repository to register.",
+        "error": "Failed to register repository"
+      },
       "selector": {
         "label": "Select Repository",
         "placeholder": "Choose a repository to configure",
@@ -487,6 +493,22 @@
           "helper": "Starts a development server for this repository. Scripts execute from within the repository's worktree directory."
         }
       },
+      "linkedProjects": {
+        "title": "Linked Projects",
+        "description": "Projects that use this repository in their default workspace configuration.",
+        "loading": "Checking projects…",
+        "none": "No projects linked"
+      },
+      "remove": {
+        "title": "Remove Repository",
+        "description": "Unlink this repository from Vibe Kanban. Files on disk will not be deleted.",
+        "button": "Remove",
+        "confirm": "Remove Repository",
+        "dialogTitle": "Remove \"{{name}}\"?",
+        "dialogDescription": "This will unlink the repository from Vibe Kanban. Your files on disk will not be affected. You can re-add it later.",
+        "success": "Repository removed successfully.",
+        "error": "Failed to remove repository."
+      },
       "save": {
         "button": "Save Repository Settings",
         "success": "Repository settings saved successfully!",
@@ -541,6 +563,17 @@
         "statuses": {
           "label": "Project Statuses",
           "description": "Manage kanban columns for this project."
+        },
+        "defaultRepos": {
+          "label": "Default Repositories",
+          "description": "Repositories that are automatically added when creating workspaces from this project's issues.",
+          "empty": "No default repositories configured",
+          "addButton": "Add",
+          "addNew": "Add new repository...",
+          "branchLabel": "Branch",
+          "noBranches": "No branches found for this repository",
+          "fetchError": "Could not load repositories",
+          "saveError": "Failed to save default repositories"
         }
       },
       "loginRequired": {
