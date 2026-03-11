@@ -836,6 +836,17 @@ export function KanbanIssuePanelContainer({
     resetIssueComposerDraft();
   }, [createModeDefaults, resetIssueComposerDraft]);
 
+  const handleTitleMultiLinePaste = useCallback(
+    (overflow: string) => {
+      const currentDescription = displayData.description ?? '';
+      const newDescription = currentDescription
+        ? overflow + '\n\n' + currentDescription
+        : overflow;
+      void handlePropertyChange('description', newDescription);
+    },
+    [displayData.description, handlePropertyChange]
+  );
+
   // Tag create callback - returns the new tag ID so it can be auto-selected
   const handleCreateTag = useCallback(
     (data: { name: string; color: string }): string => {
@@ -926,6 +937,7 @@ export function KanbanIssuePanelContainer({
         mode === 'edit' ? descriptionSaveStatus : undefined
       }
       titleInputRef={titleInputRef}
+      onTitleMultiLinePaste={handleTitleMultiLinePaste}
       onDeleteDraft={
         mode === 'create' && isCreateDraftDirty ? handleDeleteDraft : undefined
       }
