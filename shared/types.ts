@@ -326,7 +326,7 @@ export type AddWorkspaceRepoRequest = { repo_id: string, target_branch: string, 
 
 export type AddWorkspaceRepoResponse = { workspace: Workspace, repo: RepoWithTargetBranch, };
 
-export type MergeWorkspaceRequest = { repo_id: string, complete_issue: boolean, };
+export type MergeWorkspaceRequest = { repo_id: string, };
 
 export type PushWorkspaceRequest = { repo_id: string, };
 

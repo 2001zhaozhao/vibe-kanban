@@ -330,10 +330,7 @@ export function GitPanelContainer({
     setIsMergeAllPending(true);
     try {
       for (const repo of mergeableRepos) {
-        await workspacesApi.merge(selectedWorkspace.id, {
-          repo_id: repo.id,
-          complete_issue: false,
-        });
+        await workspacesApi.merge(selectedWorkspace.id, { repo_id: repo.id });
       }
       clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
       toast.success('All branches merged successfully');
@@ -377,10 +374,7 @@ export function GitPanelContainer({
     try {
       if (mergeableRepos.length > 0) {
         for (const repo of mergeableRepos) {
-          await workspacesApi.merge(selectedWorkspace.id, {
-            repo_id: repo.id,
-            complete_issue: true,
-          });
+          await workspacesApi.merge(selectedWorkspace.id, { repo_id: repo.id });
         }
         clearMergedCommitsAhead(mergeableRepos.map((r) => r.id));
       }
