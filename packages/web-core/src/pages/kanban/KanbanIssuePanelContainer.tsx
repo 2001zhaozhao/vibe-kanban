@@ -53,6 +53,7 @@ import { useCurrentKanbanRouteState } from '@/shared/hooks/useCurrentKanbanRoute
 import {
   buildKanbanIssueComposerKey,
   closeKanbanIssueComposer,
+  removeKanbanIssueComposer,
   patchKanbanIssueComposer,
   resetKanbanIssueComposer,
   useKanbanIssueComposer,
@@ -115,7 +116,7 @@ export function KanbanIssuePanelContainer({
     [routeState.hostId, projectId]
   );
   const issueComposer = useKanbanIssueComposer(issueComposerKey);
-  const kanbanCreateMode = issueComposer !== null;
+  const kanbanCreateMode = issueComposer?.isOpen === true;
   const createComposerInitial = issueComposer?.initial ?? null;
   const kanbanCreateDefaultStatusId = createComposerInitial?.statusId ?? null;
   const kanbanCreateDefaultPriority = createComposerInitial?.priority ?? null;
@@ -749,7 +750,7 @@ export function KanbanIssuePanelContainer({
         }
 
         if (issueComposerKey) {
-          closeKanbanIssueComposer(issueComposerKey);
+          removeKanbanIssueComposer(issueComposerKey);
         }
 
         if (displayData.createDraftWorkspace) {

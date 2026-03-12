@@ -23,7 +23,7 @@ export function useCurrentKanbanRouteState(): KanbanRouteState {
     return buildKanbanIssueComposerKey(routeState.hostId, routeState.projectId);
   }, [routeState.hostId, routeState.projectId]);
   const issueComposer = useKanbanIssueComposer(issueComposerKey);
-  const isCreateMode = issueComposer !== null;
+  const isCreateMode = issueComposer?.isOpen === true;
 
   return useMemo(
     () => ({

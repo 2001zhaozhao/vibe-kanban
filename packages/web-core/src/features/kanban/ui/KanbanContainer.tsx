@@ -156,7 +156,7 @@ export function KanbanContainer() {
     [routeState.hostId, projectId]
   );
   const issueComposer = useKanbanIssueComposer(issueComposerKey);
-  const isIssueComposerOpen = issueComposer !== null;
+  const isIssueComposerOpen = issueComposer?.isOpen === true;
   const openIssue = useCallback(
     (issueId: string) => {
       if (isIssueComposerOpen) {

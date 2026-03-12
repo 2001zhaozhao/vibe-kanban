@@ -23,6 +23,7 @@ export interface KanbanIssueComposerDraft {
 export interface KanbanIssueComposerEntry {
   initial: KanbanIssueComposerDraft;
   draft: KanbanIssueComposerDraft;
+  isOpen: boolean;
 }
 
 interface KanbanIssueComposerState {
@@ -37,6 +38,7 @@ interface KanbanIssueComposerState {
   ) => void;
   resetComposer: (key: string) => void;
   closeComposer: (key: string) => void;
+  removeComposer: (key: string) => void;
 }
 
 const LOCAL_HOST_SCOPE = 'local';
@@ -87,12 +89,32 @@ export const useKanbanIssueComposerStore = create<KanbanIssueComposerState>()(
     openComposer: (key, options) =>
       set((state) => {
         const initial = toInitialComposerDraft(options);
+        const existing = state.byKey[key];
+
+        // Preserve draft if it has meaningful content (user typed something)
+        if (
+          existing &&
+          (existing.draft.title !== '' || existing.draft.description != null)
+        ) {
+          return {
+            byKey: {
+              ...state.byKey,
+              [key]: {
+                initial,
+                draft: existing.draft,
+                isOpen: true,
+              },
+            },
+          };
+        }
+
         return {
           byKey: {
             ...state.byKey,
             [key]: {
               initial,
               draft: initial,
+              isOpen: true,
             },
           },
         };
@@ -136,6 +158,23 @@ export const useKanbanIssueComposerStore = create<KanbanIssueComposerState>()(
       }),
     closeComposer: (key) =>
       set((state) => {
+        const current = state.byKey[key];
+        if (!current) {
+          return state;
+        }
+
+        return {
+          byKey: {
+            ...state.byKey,
+            [key]: {
+              ...current,
+              isOpen: false,
+            },
+          },
+        };
+      }),
+    removeComposer: (key) =>
+      set((state) => {
         if (!(key in state.byKey)) {
           return state;
         }
@@ -177,4 +216,8 @@ export function resetKanbanIssueComposer(composerKey: string): void {
 
 export function closeKanbanIssueComposer(composerKey: string): void {
   useKanbanIssueComposerStore.getState().closeComposer(composerKey);
+}
+
+export function removeKanbanIssueComposer(composerKey: string): void {
+  useKanbanIssueComposerStore.getState().removeComposer(composerKey);
 }

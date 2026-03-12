@@ -23,7 +23,7 @@ import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useCurrentKanbanRouteState } from '@/shared/hooks/useCurrentKanbanRouteState';
 import {
   buildKanbanIssueComposerKey,
-  closeKanbanIssueComposer,
+  removeKanbanIssueComposer,
 } from '@/shared/stores/useKanbanIssueComposerStore';
 /**
  * Component that registers project mutations with ActionsContext.
@@ -260,7 +260,7 @@ export function ProjectKanban() {
   useEffect(() => {
     const previousKey = previousIssueComposerKeyRef.current;
     if (previousKey && previousKey !== issueComposerKey) {
-      closeKanbanIssueComposer(previousKey);
+      removeKanbanIssueComposer(previousKey);
     }
 
     previousIssueComposerKeyRef.current = issueComposerKey;

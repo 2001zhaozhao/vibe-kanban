@@ -427,7 +427,7 @@ export function ProjectRightSidebarContainer() {
     return buildKanbanIssueComposerKey(hostId, projectId);
   }, [hostId, projectId]);
   const issueComposer = useKanbanIssueComposer(issueComposerKey);
-  const isCreateMode = issueComposer !== null;
+  const isCreateMode = issueComposer?.isOpen === true;
   const openIssue = useCallback(
     (targetIssueId: string) => {
       if (!projectId) {
