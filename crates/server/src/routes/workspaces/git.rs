@@ -60,6 +60,8 @@ pub enum GitOperationError {
 #[derive(Debug, Deserialize, Serialize, TS)]
 pub struct MergeWorkspaceRequest {
     pub repo_id: Uuid,
+    #[serde(default)]
+    pub complete_issue: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -241,11 +243,13 @@ pub async fn merge_workspace(
     )
     .await?;
 
-    if let Ok(client) = deployment.remote_client() {
-        let workspace_id = workspace.id;
-        tokio::spawn(async move {
-            remote_sync::sync_local_workspace_merge_to_remote(&client, workspace_id).await;
-        });
+    if request.complete_issue {
+        if let Ok(client) = deployment.remote_client() {
+            let workspace_id = workspace.id;
+            tokio::spawn(async move {
+                remote_sync::sync_local_workspace_merge_to_remote(&client, workspace_id).await;
+            });
+        }
     }
 
     if !workspace.pinned
