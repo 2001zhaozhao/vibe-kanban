@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ReviewIdRouteImport } from './routes/review.$id'
 import { Route as UpgradeRouteImport } from './routes/upgrade'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
@@ -39,6 +40,11 @@ const ReviewIdRoute = ReviewIdRouteImport.update({
 const UpgradeRoute = UpgradeRouteImport.update({
   id: '/upgrade',
   path: '/upgrade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/review/$id': typeof ReviewIdRoute
   '/account': typeof AccountRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/upgrade': typeof UpgradeRoute
   '/account/complete': typeof AccountCompleteRoute
   '/login/complete': typeof LoginCompleteRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/review/$id': typeof ReviewIdRoute
   '/account': typeof AccountRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/upgrade': typeof UpgradeRoute
   '/account/complete': typeof AccountCompleteRoute
   '/login/complete': typeof LoginCompleteRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/review/$id': typeof ReviewIdRoute
   '/account': typeof AccountRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/upgrade': typeof UpgradeRoute
   '/account_/complete': typeof AccountCompleteRoute
   '/login_/complete': typeof LoginCompleteRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/review/$id'
     | '/account'
     | '/login'
+    | '/notifications'
     | '/upgrade'
     | '/account/complete'
     | '/login/complete'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/review/$id'
     | '/account'
     | '/login'
+    | '/notifications'
     | '/upgrade'
     | '/account/complete'
     | '/login/complete'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/review/$id'
     | '/account'
     | '/login'
+    | '/notifications'
     | '/upgrade'
     | '/account_/complete'
     | '/login_/complete'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   ReviewIdRoute: typeof ReviewIdRoute
   AccountRoute: typeof AccountRoute
   LoginRoute: typeof LoginRoute
+  NotificationsRoute: typeof NotificationsRoute
   UpgradeRoute: typeof UpgradeRoute
   AccountCompleteRoute: typeof AccountCompleteRoute
   LoginCompleteRoute: typeof LoginCompleteRoute
@@ -329,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/upgrade'
       fullPath: '/upgrade'
       preLoaderRoute: typeof UpgradeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -486,6 +506,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewIdRoute: ReviewIdRoute,
   AccountRoute: AccountRoute,
   LoginRoute: LoginRoute,
+  NotificationsRoute: NotificationsRoute,
   UpgradeRoute: UpgradeRoute,
   AccountCompleteRoute: AccountCompleteRoute,
   LoginCompleteRoute: LoginCompleteRoute,

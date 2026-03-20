@@ -7,7 +7,7 @@ import { GitPanelContainer } from './GitPanelContainer';
 import { TerminalPanelContainer } from '@/shared/components/TerminalPanelContainer';
 import { WorkspaceNotesContainer } from './WorkspaceNotesContainer';
 import { useChangesView } from '@/shared/hooks/useChangesView';
-import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
+import { useWorkspaceDiffContext } from '@/shared/hooks/useWorkspaceContext';
 import { ArrowsOutSimpleIcon } from '@phosphor-icons/react';
 import { useLogsPanel } from '@/shared/hooks/useLogsPanel';
 import type { RepoWithTargetBranch, Workspace } from 'shared/types';
@@ -50,7 +50,7 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { selectFile } = useChangesView();
-  const { diffs } = useWorkspaceContext();
+  const { diffs } = useWorkspaceDiffContext();
   const { setExpanded } = useExpandedAll();
   const isTerminalVisible = useUiPreferencesStore((s) => s.isTerminalVisible);
   const { expandTerminal, isTerminalExpanded } = useLogsPanel();

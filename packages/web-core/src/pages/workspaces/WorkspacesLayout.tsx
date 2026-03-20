@@ -59,6 +59,7 @@ export function WorkspacesLayout() {
     isLoading,
     isCreateMode,
     selectedSession,
+    selectedSessionId,
     sessions,
     selectSession,
     repos,
@@ -180,9 +181,12 @@ export function WorkspacesLayout() {
   const [mobileTab] = useMobileActiveTab();
   const mainContainerRef = useRef<WorkspacesMainContainerHandle>(null);
 
-  const handleScrollToBottom = useCallback(() => {
-    mainContainerRef.current?.scrollToBottom();
-  }, []);
+  const handleScrollToBottom = useCallback(
+    (behavior: 'auto' | 'smooth' = 'smooth') => {
+      mainContainerRef.current?.scrollToBottom(behavior);
+    },
+    []
+  );
 
   const handleWorkspaceCreated = useCallback(
     (workspaceId: string) => {
@@ -291,7 +295,9 @@ export function WorkspacesLayout() {
                   ref={mainContainerRef}
                   selectedWorkspace={selectedWorkspace ?? null}
                   selectedSession={selectedSession}
+                  selectedSessionId={selectedSessionId}
                   sessions={sessions}
+                  repos={repos}
                   onSelectSession={selectSession}
                   isLoading={isLoading}
                   isNewSessionMode={isNewSessionMode}
@@ -412,7 +418,9 @@ export function WorkspacesLayout() {
                     ref={mainContainerRef}
                     selectedWorkspace={selectedWorkspace ?? null}
                     selectedSession={selectedSession}
+                    selectedSessionId={selectedSessionId}
                     sessions={sessions}
+                    repos={repos}
                     onSelectSession={selectSession}
                     isLoading={isLoading}
                     isNewSessionMode={isNewSessionMode}
