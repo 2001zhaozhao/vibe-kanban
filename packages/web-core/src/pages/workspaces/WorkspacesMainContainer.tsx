@@ -37,6 +37,7 @@ function ChatBoxWithDiffStats({
   onStartNewSession,
   onScrollToPreviousMessage,
   onScrollToBottom,
+  onClearContextAndAcceptPlan,
 }: {
   session: Session | undefined;
   workspaceId: string | undefined;
@@ -46,6 +47,7 @@ function ChatBoxWithDiffStats({
   onStartNewSession: () => void;
   onScrollToPreviousMessage: () => void;
   onScrollToBottom: (behavior?: 'auto' | 'smooth') => void;
+  onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
 }) {
   const { diffStats } = useWorkspaceDiffContext();
 
@@ -75,6 +77,7 @@ function ChatBoxWithDiffStats({
       showOpenWorkspaceButton={false}
       onScrollToPreviousMessage={onScrollToPreviousMessage}
       onScrollToBottom={onScrollToBottom}
+      onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
     />
   );
 }

@@ -1,7 +1,7 @@
 // VS Code webview integration - install keyboard/clipboard bridge
 import '@/integrations/vscode/bridge';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from 'shared/types';
 import { useTranslation } from 'react-i18next';
 import { AppWithStyleOverride } from '@/shared/lib/StyleOverride';
@@ -39,6 +39,7 @@ function VSCodeChatBox({
   onStartNewSession,
   onScrollToPreviousMessage,
   onScrollToBottom,
+  onClearContextAndAcceptPlan,
 }: {
   session: Session | undefined;
   workspaceId: string | undefined;
@@ -48,6 +49,7 @@ function VSCodeChatBox({
   onStartNewSession: () => void;
   onScrollToPreviousMessage: () => void;
   onScrollToBottom: (behavior?: 'auto' | 'smooth') => void;
+  onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
 }) {
   const { diffStats } = useWorkspaceDiffContext();
 
@@ -77,6 +79,7 @@ function VSCodeChatBox({
       showOpenWorkspaceButton={false}
       onScrollToPreviousMessage={onScrollToPreviousMessage}
       onScrollToBottom={onScrollToBottom}
+      onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
     />
   );
 }
@@ -98,11 +101,9 @@ export function VSCodeWorkspacePage() {
     selectedSessionId,
     selectSession,
     isLoading,
-    diffStats,
     repos,
     isNewSessionMode,
     startNewSession,
-    repos,
   } = useWorkspaceContext();
 
   // Linked issue from remote project context (if available)
@@ -153,7 +154,7 @@ export function VSCodeWorkspacePage() {
           permission_policy: PermissionPolicy.AUTO,
         },
         prompt,
-        image_ids: null,
+        attachment_ids: null,
       });
 
       await workspacesApi.update(workspaceId, { archived: true });

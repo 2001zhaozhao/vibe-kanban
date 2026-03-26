@@ -263,7 +263,7 @@ function WorkspaceSessionPanel({
           permission_policy: PermissionPolicy.AUTO,
         },
         prompt,
-        image_ids: null,
+        attachment_ids: null,
       });
 
       await workspacesApi.update(workspaceId, { archived: true });
