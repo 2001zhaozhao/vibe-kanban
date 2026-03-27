@@ -3239,7 +3239,6 @@ dependencies = [
  "azure_identity",
  "azure_storage_blob",
  "base64",
-    "bytes",
  "chrono",
  "flate2",
  "futures",

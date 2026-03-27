@@ -540,7 +540,7 @@ async fn fallback_get_single_issue(
 ) -> Result<Json<ListIssuesResponse>, ErrorResponse> {
     ensure_issue_access(state.pool(), ctx.user.id, query.issue_id).await?;
 
-    let issues = IssueRepository::find_by_id(state.pool(), query.issue_id)
+    let issues: Vec<_> = IssueRepository::find_by_id(state.pool(), query.issue_id)
         .await
         .map_err(|error| {
             tracing::error!(?error, issue_id = %query.issue_id, "failed to get single issue (fallback)");
@@ -549,5 +549,11 @@ async fn fallback_get_single_issue(
         .into_iter()
         .collect();
 
-    Ok(Json(ListIssuesResponse { issues }))
+    let total_count = issues.len();
+    Ok(Json(ListIssuesResponse {
+        issues,
+        total_count,
+        limit: total_count,
+        offset: 0,
+    }))
 }
