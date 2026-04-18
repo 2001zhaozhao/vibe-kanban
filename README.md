@@ -58,6 +58,7 @@ My aim is to push the human-in-the-loop AI development workflow as far as possib
   window to the new agent, and archive the existing workspace.
   This is analogous to how the same feature in the Claude Code CLI behaves, except it also creates a new Git worktree
   for the workspace due to how vibe-kanban works.
+* Remove the "vibe kanban is shutting down" banner because don't care
 
 ## TLS Setup Guide
 
