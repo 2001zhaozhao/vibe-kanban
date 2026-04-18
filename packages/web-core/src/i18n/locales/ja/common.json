@@ -68,16 +68,10 @@
     "browserDefault": "ブラウザ設定"
   },
   "states": {
-    "error": "エラー",
-    "loading": "読み込み中...",
-    "loadingHistory": "履歴を読み込み中",
-    "reconnecting": "再接続中",
-    "saving": "保存中...",
-    "success": "成功"
+    "loading": "読み込み中..."
   },
   "orgSwitcher": {
     "organizations": "組織",
-    "createOrganization": "組織を作成",
     "orgSettings": "組織の設定"
   },
   "ok": "OK",
@@ -483,7 +477,7 @@
       },
       "organizations": {
         "title": "Invite your team",
-        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+        "content": "We've automatically created a personal organization and initial project so you can get started with Vibe Kanban. Export your cloud data before shutdown."
       }
     }
   },
@@ -515,12 +509,20 @@
     "default": "デフォルト",
     "model": "モデル"
   },
+  "crashScreen": {
+    "title": "問題が発生しました",
+    "description": "アプリケーションで予期しないエラーが発生しました。",
+    "reload": "再読み込み",
+    "showDetails": "詳細を表示",
+    "hideDetails": "詳細を非表示"
+  },
   "syncError": {
     "networkErrors": "ネットワークエラー",
     "streamsAffected": "{{count}}件のストリームが影響を受けています",
     "streamsAffected_other": "{{count}}件のストリームが影響を受けています",
     "status": "(ステータス {{status}})",
-    "refreshPage": "ページを更新"
+    "refreshPage": "ページを更新",
+    "remoteAuthUnavailable": "リモート認証は一時的に利用できません。復旧するまで、一部のリモート機能は利用できない可能性があります。"
   },
   "onboardingSignIn": {
     "subtitle": "Sign in to continue",
@@ -532,16 +534,11 @@
     "yes": "Yes",
     "no": "No"
   },
-  "migration": {
-    "allProjectsMigrated": "すべてのプロジェクトはすでにクラウドに移行済みです。",
-    "continueToProjects": "プロジェクトに進む"
-  },
   "appBar": {
     "kanban": {
-      "tooltip": "カンバン",
+      "tooltip": "サインインしてプロジェクトを表示",
       "title": "カンバンボード",
-      "description": "サインインしてカンバンボードでコーディングエージェントを整理しましょう。",
-      "migrateOldProjects": "古いプロジェクトを移行"
+      "description": "サインインしてカンバンボードでコーディングエージェントを整理しましょう。"
     }
   },
   "errors": {

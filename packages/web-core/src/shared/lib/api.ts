@@ -45,11 +45,11 @@ import {
   GhCliSetupError,
   RunScriptError,
   StatusResponse,
+  CreateOrganizationRequest,
+  CreateOrganizationResponse,
   ListOrganizationsResponse,
   OrganizationMemberWithProfile,
   ListMembersResponse,
-  CreateOrganizationRequest,
-  CreateOrganizationResponse,
   CreateInvitationRequest,
   CreateInvitationResponse,
   RevokeInvitationRequest,
@@ -78,26 +78,33 @@ import {
   Workspace,
   StartReviewRequest,
   ReviewError,
-  OpenPrInfo,
   GitRemote,
   ListPrsError,
+  PullRequestDetail,
+  LinkPrToIssueRequest,
   AttachExistingPrRequest,
   AttachPrResponse,
   CreateWorkspaceFromPrBody,
   CreateWorkspaceFromPrResponse,
   CreateFromPrError,
-  MigrationRequest,
-  MigrationResponse,
-  Project,
   CreateAndStartWorkspaceRequest,
   CreateAndStartWorkspaceResponse,
   RelayPairedClient,
   ListRelayPairedClientsResponse,
   RemoveRelayPairedClientResponse,
+  PairRelayHostRequest,
+  PairRelayHostResponse,
+  RelayPairedHost,
+  ListRelayPairedHostsResponse,
+  RemoveRelayPairedHostResponse,
+  OpenRemoteWorkspaceInEditorRequest,
+  OpenRemoteEditorResponse,
+  ProfileResponse,
 } from 'shared/types';
 import type { Project as RemoteProject } from 'shared/remote-types';
 import type { WorkspaceWithSession } from '@/shared/types/attempt';
 import { createWorkspaceWithSession } from '@/shared/types/attempt';
+import { resolveHostRequestScope } from '@/shared/lib/hostRequestScope';
 import { makeRequest as makeRemoteRequest } from '@/shared/lib/remoteApi';
 import { makeLocalApiRequest } from '@/shared/lib/localApiTransport';
 
@@ -130,6 +137,42 @@ const makeRequest = async (url: string, options: RequestInit = {}) => {
   });
 };
 
+const makeScopedRequest = async (
+  url: string,
+  hostId: string | null,
+  options: RequestInit = {}
+) => {
+  const headers = new Headers(options.headers ?? {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return makeLocalApiRequest(url, {
+    ...options,
+    headers,
+    hostScope: 'explicit',
+    hostId,
+  });
+};
+
+const makeHostAwareRequest = async (
+  url: string,
+  hostId: string | null | undefined,
+  options: RequestInit = {}
+) => {
+  const scope = resolveHostRequestScope(hostId);
+
+  if (scope.kind === 'current') {
+    return makeRequest(url, options);
+  }
+
+  return makeScopedRequest(
+    url,
+    scope.kind === 'host' ? scope.hostId : null,
+    options
+  );
+};
+
 export type Ok<T> = { success: true; data: T };
 export type Err<E> = { success: false; error: E | undefined; message?: string };
 
@@ -150,6 +193,7 @@ export type OrganizationBillingStatus =
 export interface OrganizationBillingStatusResponse {
   status: OrganizationBillingStatus;
   billing_enabled: boolean;
+  can_manage_billing: boolean;
   seat_info: {
     current_members: number;
     free_seats: number;
@@ -475,6 +519,15 @@ export const workspacesApi = {
     return handleApiResponse<OpenEditorResponse>(response);
   },
 
+  getEditorPath: async (
+    workspaceId: string
+  ): Promise<{ workspace_path: string }> => {
+    const response = await makeRequest(
+      `/api/workspaces/${workspaceId}/integration/editor/path`
+    );
+    return handleApiResponse<{ workspace_path: string }>(response);
+  },
+
   getBranchStatus: async (workspaceId: string): Promise<RepoBranchStatus[]> => {
     const response = await makeRequest(
       `/api/workspaces/${workspaceId}/git/status`
@@ -780,8 +833,8 @@ export const fileSystemApi = {
 
 // Repo APIs
 export const repoApi = {
-  list: async (): Promise<Repo[]> => {
-    const response = await makeRequest('/api/repos');
+  list: async (hostId?: string | null): Promise<Repo[]> => {
+    const response = await makeHostAwareRequest('/api/repos', hostId);
     return handleApiResponse<Repo[]>(response);
   },
 
@@ -790,47 +843,71 @@ export const repoApi = {
     return handleApiResponse<Repo[]>(response);
   },
 
-  getById: async (repoId: string): Promise<Repo> => {
-    const response = await makeRequest(`/api/repos/${repoId}`);
+  getById: async (repoId: string, hostId?: string | null): Promise<Repo> => {
+    const response = await makeHostAwareRequest(`/api/repos/${repoId}`, hostId);
     return handleApiResponse<Repo>(response);
   },
 
-  update: async (repoId: string, data: UpdateRepo): Promise<Repo> => {
-    const response = await makeRequest(`/api/repos/${repoId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  update: async (
+    repoId: string,
+    data: UpdateRepo,
+    hostId?: string | null
+  ): Promise<Repo> => {
+    const response = await makeHostAwareRequest(
+      `/api/repos/${repoId}`,
+      hostId,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
     return handleApiResponse<Repo>(response);
   },
 
-  delete: async (repoId: string): Promise<void> => {
-    const response = await makeRequest(`/api/repos/${repoId}`, {
-      method: 'DELETE',
-    });
+  delete: async (repoId: string, hostId?: string | null): Promise<void> => {
+    const response = await makeHostAwareRequest(
+      `/api/repos/${repoId}`,
+      hostId,
+      {
+        method: 'DELETE',
+      }
+    );
     return handleApiResponse<void>(response);
   },
 
-  register: async (data: {
-    path: string;
-    display_name?: string;
-  }): Promise<Repo> => {
-    const response = await makeRequest('/api/repos', {
+  register: async (
+    data: {
+      path: string;
+      display_name?: string;
+    },
+    hostId?: string | null
+  ): Promise<Repo> => {
+    const response = await makeHostAwareRequest('/api/repos', hostId, {
       method: 'POST',
       body: JSON.stringify(data),
     });
     return handleApiResponse<Repo>(response);
   },
 
-  getBranches: async (repoId: string): Promise<GitBranch[]> => {
-    const response = await makeRequest(`/api/repos/${repoId}/branches`);
+  getBranches: async (
+    repoId: string,
+    hostId?: string | null
+  ): Promise<GitBranch[]> => {
+    const response = await makeHostAwareRequest(
+      `/api/repos/${repoId}/branches`,
+      hostId
+    );
     return handleApiResponse<GitBranch[]>(response);
   },
 
-  init: async (data: {
-    parent_path: string;
-    folder_name: string;
-  }): Promise<Repo> => {
-    const response = await makeRequest('/api/repos/init', {
+  init: async (
+    data: {
+      parent_path: string;
+      folder_name: string;
+    },
+    hostId?: string | null
+  ): Promise<Repo> => {
+    const response = await makeHostAwareRequest('/api/repos/init', hostId, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -873,12 +950,14 @@ export const repoApi = {
   listOpenPrs: async (
     repoId: string,
     remoteName?: string
-  ): Promise<Result<OpenPrInfo[], ListPrsError>> => {
+  ): Promise<Result<PullRequestDetail[], ListPrsError>> => {
     const params = remoteName
       ? `?remote=${encodeURIComponent(remoteName)}`
       : '';
     const response = await makeRequest(`/api/repos/${repoId}/prs${params}`);
-    return handleApiResponseAsResult<OpenPrInfo[], ListPrsError>(response);
+    return handleApiResponseAsResult<PullRequestDetail[], ListPrsError>(
+      response
+    );
   },
 
   listRemotes: async (repoId: string): Promise<GitRemote[]> => {
@@ -887,14 +966,39 @@ export const repoApi = {
   },
 };
 
+// Issue PR linking APIs
+export const issuePrsApi = {
+  getPrInfo: async (
+    url: string
+  ): Promise<Result<PullRequestDetail, ListPrsError>> => {
+    const response = await makeRequest(
+      `/api/repos/pr-info?url=${encodeURIComponent(url)}`
+    );
+    return handleApiResponseAsResult<PullRequestDetail, ListPrsError>(response);
+  },
+
+  linkToIssue: async (data: LinkPrToIssueRequest): Promise<void> => {
+    const response = await makeRequest('/api/remote/pull-requests/link', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    await handleApiResponse<void>(response);
+  },
+};
+
 // Config APIs (backwards compatible)
 export const configApi = {
-  getConfig: async (): Promise<UserSystemInfo> => {
-    const response = await makeRequest('/api/info', { cache: 'no-store' });
+  getConfig: async (hostId?: string | null): Promise<UserSystemInfo> => {
+    const response = await makeHostAwareRequest('/api/info', hostId, {
+      cache: 'no-store',
+    });
     return handleApiResponse<UserSystemInfo>(response);
   },
-  saveConfig: async (config: Config): Promise<Config> => {
-    const response = await makeRequest('/api/config', {
+  saveConfig: async (
+    config: Config,
+    hostId?: string | null
+  ): Promise<Config> => {
+    const response = await makeHostAwareRequest('/api/config', hostId, {
       method: 'PUT',
       body: JSON.stringify(config),
     });
@@ -954,21 +1058,32 @@ export const tagsApi = {
 
 // MCP Servers APIs
 export const mcpServersApi = {
-  load: async (query: McpServerQuery): Promise<GetMcpServerResponse> => {
+  load: async (
+    query: McpServerQuery,
+    hostId?: string | null
+  ): Promise<GetMcpServerResponse> => {
     const params = new URLSearchParams(query);
-    const response = await makeRequest(`/api/mcp-config?${params.toString()}`);
+    const response = await makeHostAwareRequest(
+      `/api/mcp-config?${params.toString()}`,
+      hostId
+    );
     return handleApiResponse<GetMcpServerResponse>(response);
   },
   save: async (
     query: McpServerQuery,
-    data: UpdateMcpServersBody
+    data: UpdateMcpServersBody,
+    hostId?: string | null
   ): Promise<void> => {
     const params = new URLSearchParams(query);
     // params.set('profile', profile);
-    const response = await makeRequest(`/api/mcp-config?${params.toString()}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const response = await makeHostAwareRequest(
+      `/api/mcp-config?${params.toString()}`,
+      hostId,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
     if (!response.ok) {
       const errorData = await response.json();
       console.error('[API Error] Failed to save MCP servers', {
@@ -988,12 +1103,14 @@ export const mcpServersApi = {
 
 // Profiles API
 export const profilesApi = {
-  load: async (): Promise<{ content: string; path: string }> => {
-    const response = await makeRequest('/api/profiles');
+  load: async (
+    hostId?: string | null
+  ): Promise<{ content: string; path: string }> => {
+    const response = await makeHostAwareRequest('/api/profiles', hostId);
     return handleApiResponse<{ content: string; path: string }>(response);
   },
-  save: async (content: string): Promise<string> => {
-    const response = await makeRequest('/api/profiles', {
+  save: async (content: string, hostId?: string | null): Promise<string> => {
+    const response = await makeHostAwareRequest('/api/profiles', hostId, {
       method: 'PUT',
       body: content,
       headers: {
@@ -1121,7 +1238,19 @@ export const approvalsApi = {
 };
 
 // OAuth API
+export type AuthMethodsResponse = {
+  local_auth_enabled: boolean;
+  oauth_providers: string[];
+};
+
 export const oauthApi = {
+  authMethods: async (): Promise<AuthMethodsResponse> => {
+    const response = await makeRequest('/api/auth/methods', {
+      cache: 'no-store',
+    });
+    return handleApiResponse<AuthMethodsResponse>(response);
+  },
+
   handoffInit: async (
     provider: string,
     returnTo: string
@@ -1142,6 +1271,17 @@ export const oauthApi = {
     return handleApiResponse<StatusResponse>(response);
   },
 
+  localLogin: async (
+    email: string,
+    password: string
+  ): Promise<ProfileResponse> => {
+    const response = await makeRequest('/api/auth/local/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    return handleApiResponse<ProfileResponse>(response);
+  },
+
   logout: async (): Promise<void> => {
     const response = await makeRequest('/api/auth/logout', {
       method: 'POST',
@@ -1156,12 +1296,11 @@ export const oauthApi = {
   },
 
   /** Returns the current access token for the remote server (auto-refreshes if needed) */
-  getToken: async (): Promise<TokenResponse | null> => {
+  getToken: async (): Promise<TokenResponse> => {
     const response = await makeRequest('/api/auth/token');
     if (response.status === 401) {
       throw new ApiError('Unauthorized', 401, response);
     }
-    if (!response.ok) return null;
     return handleApiResponse<TokenResponse>(response);
   },
 
@@ -1319,25 +1458,6 @@ export const organizationsApi = {
     return handleRemoteResponse<OrganizationBillingStatusResponse>(response);
   },
 
-  createCheckoutSession: async (
-    orgId: string,
-    successUrl: string,
-    cancelUrl: string
-  ): Promise<{ url: string }> => {
-    const response = await makeRemoteRequest(
-      `/v1/organizations/${orgId}/billing/checkout`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-        }),
-      }
-    );
-    return handleRemoteResponse<{ url: string }>(response);
-  },
-
   createPortalSession: async (
     orgId: string,
     returnUrl: string
@@ -1481,33 +1601,20 @@ export const queueApi = {
   },
 };
 
-// Migration API
-export const migrationApi = {
-  listProjects: async (): Promise<Project[]> => {
-    const response = await makeRequest('/api/migration/projects');
-    return handleApiResponse<Project[]>(response);
-  },
-
-  start: async (data: MigrationRequest): Promise<MigrationResponse> => {
-    const response = await makeRequest('/api/migration/start', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse<MigrationResponse>(response);
-  },
-};
-
 // Relay API
 export const relayApi = {
   getEnrollmentCode: async (): Promise<{ enrollment_code: string }> => {
-    const response = await makeRequest('/api/relay-auth/enrollment-code', {
-      method: 'POST',
-    });
+    const response = await makeRequest(
+      '/api/relay-auth/server/enrollment-code',
+      {
+        method: 'POST',
+      }
+    );
     return handleApiResponse<{ enrollment_code: string }>(response);
   },
 
   listPairedClients: async (): Promise<RelayPairedClient[]> => {
-    const response = await makeRequest('/api/relay-auth/clients');
+    const response = await makeRequest('/api/relay-auth/server/clients');
     const body =
       await handleApiResponse<ListRelayPairedClientsResponse>(response);
     return body.clients;
@@ -1517,12 +1624,51 @@ export const relayApi = {
     clientId: string
   ): Promise<RemoveRelayPairedClientResponse> => {
     const response = await makeRequest(
-      `/api/relay-auth/clients/${encodeURIComponent(clientId)}`,
+      `/api/relay-auth/server/clients/${encodeURIComponent(clientId)}`,
       {
         method: 'DELETE',
       }
     );
     return handleApiResponse<RemoveRelayPairedClientResponse>(response);
+  },
+
+  pairRelayHost: async (
+    payload: PairRelayHostRequest
+  ): Promise<PairRelayHostResponse> => {
+    const response = await makeRequest('/api/relay-auth/client/pair', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<PairRelayHostResponse>(response);
+  },
+
+  listPairedRelayHosts: async (): Promise<RelayPairedHost[]> => {
+    const response = await makeRequest('/api/relay-auth/client/hosts');
+    const body =
+      await handleApiResponse<ListRelayPairedHostsResponse>(response);
+    return body.hosts;
+  },
+
+  removePairedRelayHost: async (
+    hostId: string
+  ): Promise<RemoveRelayPairedHostResponse> => {
+    const response = await makeRequest(
+      `/api/relay-auth/client/hosts/${encodeURIComponent(hostId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    return handleApiResponse<RemoveRelayPairedHostResponse>(response);
+  },
+
+  openRemoteWorkspaceInEditor: async (
+    payload: OpenRemoteWorkspaceInEditorRequest
+  ): Promise<OpenRemoteEditorResponse> => {
+    const response = await makeRequest('/api/open-remote-editor/workspace', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<OpenRemoteEditorResponse>(response);
   },
 };
 

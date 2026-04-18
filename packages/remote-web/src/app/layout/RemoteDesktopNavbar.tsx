@@ -22,7 +22,6 @@ import {
 import { useActionVisibilityContext } from "@/shared/hooks/useActionVisibilityContext";
 import { SettingsDialog } from "@/shared/dialogs/settings/SettingsDialog";
 import { CommandBarDialog } from "@/shared/dialogs/command-bar/CommandBarDialog";
-import { REMOTE_SETTINGS_SECTIONS } from "@remote/shared/constants/settings";
 
 /**
  * Check if a NavbarItem is a divider
@@ -129,34 +128,28 @@ export function RemoteDesktopNavbar() {
     [executeAction, selectedWorkspace?.id],
   );
 
-  const isMigratePage = actionCtx.layoutMode === "migrate";
-
   const leftItems = useMemo(
     () =>
-      isMigratePage
-        ? []
-        : toNavbarSectionItems(
-            filterNavbarItems(NavbarActionGroups.left, actionCtx),
-            actionCtx,
-            handleExecuteAction,
-          ),
-    [actionCtx, handleExecuteAction, isMigratePage],
+      toNavbarSectionItems(
+        filterNavbarItems(NavbarActionGroups.left, actionCtx),
+        actionCtx,
+        handleExecuteAction,
+      ),
+    [actionCtx, handleExecuteAction],
   );
 
   const rightItems = useMemo(
     () =>
-      isMigratePage
-        ? []
-        : toNavbarSectionItems(
-            filterNavbarItems(NavbarActionGroups.right, actionCtx),
-            actionCtx,
-            handleExecuteAction,
-          ),
-    [actionCtx, handleExecuteAction, isMigratePage],
+      toNavbarSectionItems(
+        filterNavbarItems(NavbarActionGroups.right, actionCtx),
+        actionCtx,
+        handleExecuteAction,
+      ),
+    [actionCtx, handleExecuteAction],
   );
 
   const handleOpenSettings = useCallback(() => {
-    SettingsDialog.show({ sections: REMOTE_SETTINGS_SECTIONS });
+    SettingsDialog.show();
   }, []);
 
   const handleOpenCommandBar = useCallback(() => {

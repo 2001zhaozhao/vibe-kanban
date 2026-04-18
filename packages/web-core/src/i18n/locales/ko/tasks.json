@@ -109,13 +109,7 @@
   },
   "diff": {
     "filesChanged_one": "{{count}} file changed",
-    "filesChanged_other": "{{count}} files changed",
-    "largeDiff": {
-      "title": "큰 파일",
-      "linesChanged": "{{count}} 줄 변경됨",
-      "loadAnyway": "그래도 diff 로드",
-      "warning": "큰 diff는 브라우저를 느리게 할 수 있습니다."
-    }
+    "filesChanged_other": "{{count}} files changed"
   },
   "followUp": {
     "queuedMessage": "메시지가 대기열에 추가됨 - 현재 실행이 완료되면 실행됩니다"
@@ -514,6 +508,31 @@
       "title": "Sign in required",
       "description": "Sign in to access this feature.",
       "action": "Sign in"
+    }
+  },
+  "linkPrToIssue": {
+    "title": "풀 리퀘스트 연결",
+    "description": "기존 풀 리퀘스트를 이 이슈에 연결합니다.",
+    "urlTab": "URL로",
+    "browseTab": "탐색",
+    "urlLabel": "풀 리퀘스트 URL",
+    "urlPlaceholder": "https://github.com/owner/repo/pull/123",
+    "repositoryLabel": "저장소",
+    "remoteLabel": "리모트",
+    "pullRequestLabel": "풀 리퀘스트",
+    "loadingPrInfo": "PR 정보 불러오는 중...",
+    "invalidUrl": "이 URL에서 PR 정보를 불러올 수 없습니다",
+    "baseBranch": "베이스:",
+    "linkPr": "PR 연결",
+    "linking": "연결 중...",
+    "status": {
+      "open": "열림",
+      "merged": "병합됨",
+      "closed": "닫힘",
+      "unknown": "알 수 없음"
+    },
+    "errors": {
+      "failed": "PR 연결에 실패했습니다. 다시 시도해 주세요."
     }
   }
 }

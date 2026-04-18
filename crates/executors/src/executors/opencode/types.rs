@@ -7,7 +7,7 @@ use workspace_utils::approvals::{ApprovalStatus, QuestionStatus};
 /// JSON log events emitted by the OpenCode SDK executor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum OpencodeExecutorEvent {
+pub(super) enum OpencodeExecutorEvent {
     StartupLog {
         message: String,
     },
@@ -67,6 +67,7 @@ pub(super) enum SdkEvent {
     PermissionAsked(PermissionAskedEvent),
     PermissionReplied,
     SessionIdle,
+    SessionUpdated,
     SessionStatus(SessionStatusEvent),
     SessionDiff,
     SessionCompacted,
@@ -101,6 +102,10 @@ impl SdkEvent {
             }
             "permission.replied" => SdkEvent::PermissionReplied,
             "session.idle" => SdkEvent::SessionIdle,
+            "session.updated" => {
+                parse_session_updated_event(&envelope.properties)?;
+                SdkEvent::SessionUpdated
+            }
             "session.status" => {
                 SdkEvent::SessionStatus(serde_json::from_value(envelope.properties).ok()?)
             }
@@ -299,6 +304,11 @@ pub(super) struct TodoUpdatedEvent {
     pub(super) todos: Vec<SdkTodo>,
 }
 
+fn parse_session_updated_event(properties: &Value) -> Option<()> {
+    properties.get("sessionID")?.as_str()?;
+    Some(())
+}
+
 #[derive(Debug, Deserialize)]
 pub(super) struct SdkTodo {
     #[serde(default)]
@@ -428,7 +438,7 @@ pub(super) struct Config {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct ProviderModelInfo {
+pub(super) struct ProviderModelInfo {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
@@ -442,13 +452,13 @@ pub struct ProviderModelInfo {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct ProviderModelLimit {
+pub(super) struct ProviderModelLimit {
     #[serde(default, deserialize_with = "deserialize_f64_as_u32")]
     pub context: u32,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ProviderInfo {
+pub(super) struct ProviderInfo {
     pub id: String,
     #[serde(default)]
     pub name: String,
@@ -457,7 +467,7 @@ pub struct ProviderInfo {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ProviderListResponse {
+pub(super) struct ProviderListResponse {
     pub all: Vec<ProviderInfo>,
     #[serde(default)]
     pub connected: Vec<String>,

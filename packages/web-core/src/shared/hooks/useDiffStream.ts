@@ -1,9 +1,14 @@
 import { useCallback, useMemo } from 'react';
 import type { Diff, PatchType } from 'shared/types';
 import { useJsonPatchWsStream } from '@/shared/hooks/useJsonPatchWsStream';
+import { useHostId } from '@/shared/providers/HostIdProvider';
+
+interface RepoDiffEntries {
+  [filePath: string]: PatchType;
+}
 
 interface DiffEntries {
-  [filePath: string]: PatchType;
+  [repoName: string]: RepoDiffEntries;
 }
 
 type DiffStreamEvent = {
@@ -25,9 +30,11 @@ export const useDiffStream = (
   enabled: boolean,
   options?: UseDiffStreamOptions
 ): UseDiffStreamResult => {
+  const hostId = useHostId();
   const endpoint = (() => {
     if (!workspaceId) return undefined;
-    const query = `/api/workspaces/${workspaceId}/git/diff/ws`;
+    const apiBasePath = hostId ? `/api/host/${hostId}` : '/api';
+    const query = `${apiBasePath}/workspaces/${workspaceId}/git/diff/ws`;
     if (typeof options?.statsOnly === 'boolean') {
       const params = new URLSearchParams();
       params.set('stats_only', String(options.statsOnly));
@@ -53,7 +60,11 @@ export const useDiffStream = (
 
   const diffs = useMemo(() => {
     return Object.values(data?.entries ?? {})
-      .filter((entry) => entry?.type === 'DIFF')
+      .flatMap((repoEntries) => Object.values(repoEntries ?? {}))
+      .filter(
+        (entry): entry is Extract<PatchType, { type: 'DIFF' }> =>
+          entry?.type === 'DIFF'
+      )
       .map((entry) => entry.content);
   }, [data?.entries]);
 

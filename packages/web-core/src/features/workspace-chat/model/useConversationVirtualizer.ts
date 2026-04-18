@@ -224,35 +224,6 @@ export function useConversationVirtualizer({
   }, [shouldSuppressSizeAdjustment, virtualizer]);
 
   // -------------------------------------------------------------------------
-  // Container resize invalidation
-  //
-  // Width change → text wrapping changes → all row heights stale.
-  // virtualizer.measure() invalidates cached sizes so rows re-measure.
-  // -------------------------------------------------------------------------
-
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    let lastWidth = el.clientWidth;
-
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const newWidth = Math.round(
-          entry.contentBoxSize?.[0]?.inlineSize ?? el.clientWidth
-        );
-        if (newWidth !== lastWidth) {
-          lastWidth = newWidth;
-          virtualizer.measure();
-        }
-      }
-    });
-
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scrollContainerRef, virtualizer]);
-
-  // -------------------------------------------------------------------------
   // Reactive isAtBottom state
   // -------------------------------------------------------------------------
 
@@ -281,29 +252,42 @@ export function useConversationVirtualizer({
     );
   }, [isBottomScrollCorrectionActive, scrollContainerRef]);
 
+  const prevScrollTopRef = useRef(0);
+
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
 
+    prevScrollTopRef.current = el.scrollTop;
+
     const handleScroll = () => {
+      const currentScrollTop = el.scrollTop;
+
+      // Release bottom lock on any user-initiated upward scroll.
+      // Guards prevent false positives from programmatic scroll sources:
+      // - smoothScrollDeadlineRef: set during scrollToBottom('smooth')
+      // - shouldSuppressSizeAdjustment: set during interaction anchor corrections
+      // - 5px threshold: filters input-resize micro-adjustments
+      if (
+        bottomLockedRef.current &&
+        prevScrollTopRef.current - currentScrollTop > 5 &&
+        performance.now() > smoothScrollDeadlineRef.current &&
+        !shouldSuppressSizeAdjustment?.()
+      ) {
+        bottomLockedRef.current = false;
+      }
+
+      prevScrollTopRef.current = currentScrollTop;
       syncIsAtBottom();
     };
 
-    const handleWheel = (event: WheelEvent) => {
-      if (bottomLockedRef.current && event.deltaY < 0) {
-        bottomLockedRef.current = false;
-      }
-    };
-
     el.addEventListener('scroll', handleScroll, { passive: true });
-    el.addEventListener('wheel', handleWheel, { passive: true });
     handleScroll();
 
     return () => {
       el.removeEventListener('scroll', handleScroll);
-      el.removeEventListener('wheel', handleWheel);
     };
-  }, [scrollContainerRef, syncIsAtBottom]);
+  }, [scrollContainerRef, shouldSuppressSizeAdjustment, syncIsAtBottom]);
 
   // -------------------------------------------------------------------------
   // Derived state

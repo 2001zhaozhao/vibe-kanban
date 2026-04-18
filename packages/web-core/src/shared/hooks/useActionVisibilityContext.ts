@@ -5,10 +5,8 @@ import {
   useWorkspacePanelState,
   type LayoutMode,
 } from '@/shared/stores/useUiPreferencesStore';
-import {
-  useDiffViewStore,
-  useDiffViewMode,
-} from '@/shared/stores/useDiffViewStore';
+import { useDiffViewMode } from '@/shared/stores/useDiffViewStore';
+import { useDiffPaths } from '@/shared/stores/useWorkspaceDiffStore';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { useDevServer } from '@/shared/hooks/useDevServer';
@@ -45,7 +43,7 @@ export function useActionVisibilityContext(
   const panelState = useWorkspacePanelState(
     isCreateMode ? undefined : workspaceId
   );
-  const diffPaths = useDiffViewStore((s) => s.diffPaths);
+  const diffPathsSet = useDiffPaths();
   const diffViewMode = useDiffViewMode();
   const expanded = useUiPreferencesStore((s) => s.expanded);
 
@@ -87,9 +85,7 @@ export function useActionVisibilityContext(
   // Derive layoutMode from current route instead of persisted state
   const layoutMode: LayoutMode = isProjectDestination(destination)
     ? 'kanban'
-    : destination?.kind === 'migrate'
-      ? 'migrate'
-      : 'workspaces';
+    : 'workspaces';
   const { config } = useUserSystem();
   const { isStarting, isStopping, runningDevServers } =
     useDevServer(workspaceId);
@@ -100,9 +96,11 @@ export function useActionVisibilityContext(
 
   return useMemo(() => {
     // Compute isAllDiffsExpanded
-    const diffKeys = diffPaths.map((p) => `diff:${p}`);
+    const diffPaths = Array.from(diffPathsSet);
+    const diffKeys = diffPaths.map((p: string) => `diff:${p}`);
     const isAllDiffsExpanded =
-      diffKeys.length > 0 && diffKeys.every((k) => expanded[k] !== false);
+      diffKeys.length > 0 &&
+      diffKeys.every((k: string) => expanded[k] !== false);
 
     // Compute dev server state
     const devServerState: DevServerState = isStarting
@@ -134,7 +132,7 @@ export function useActionVisibilityContext(
       isCreateMode,
       hasWorkspace: !!workspace,
       workspaceArchived: workspace?.archived ?? false,
-      hasDiffs: diffPaths.length > 0,
+      hasDiffs: diffPathsSet.size > 0,
       diffViewMode,
       isAllDiffsExpanded,
       editorType: config?.editor?.editor_type ?? null,
@@ -160,7 +158,7 @@ export function useActionVisibilityContext(
     isCreateMode,
     workspace,
     repos,
-    diffPaths,
+    diffPathsSet,
     diffViewMode,
     expanded,
     config?.editor?.editor_type,

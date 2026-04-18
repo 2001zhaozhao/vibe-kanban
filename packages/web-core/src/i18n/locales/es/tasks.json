@@ -109,13 +109,7 @@
   },
   "diff": {
     "filesChanged_one": "{{count}} file changed",
-    "filesChanged_other": "{{count}} files changed",
-    "largeDiff": {
-      "title": "Archivo grande",
-      "linesChanged": "{{count}} líneas cambiadas",
-      "loadAnyway": "Cargar diff de todos modos",
-      "warning": "Los diffs grandes pueden ralentizar tu navegador."
-    }
+    "filesChanged_other": "{{count}} files changed"
   },
   "followUp": {
     "queuedMessage": "Mensaje en cola - se ejecutará cuando finalice la ejecución actual"
@@ -514,6 +508,31 @@
       "title": "Sign in required",
       "description": "Sign in to access this feature.",
       "action": "Sign in"
+    }
+  },
+  "linkPrToIssue": {
+    "title": "Vincular solicitud de extracción",
+    "description": "Vincular una solicitud de extracción existente a este issue.",
+    "urlTab": "Desde URL",
+    "browseTab": "Explorar",
+    "urlLabel": "URL de la solicitud de extracción",
+    "urlPlaceholder": "https://github.com/owner/repo/pull/123",
+    "repositoryLabel": "Repositorio",
+    "remoteLabel": "Remoto",
+    "pullRequestLabel": "Solicitud de extracción",
+    "loadingPrInfo": "Cargando información del PR...",
+    "invalidUrl": "No se pudo cargar la información del PR desde esta URL",
+    "baseBranch": "Base:",
+    "linkPr": "Vincular PR",
+    "linking": "Vinculando...",
+    "status": {
+      "open": "Abierto",
+      "merged": "Fusionado",
+      "closed": "Cerrado",
+      "unknown": "Desconocido"
+    },
+    "errors": {
+      "failed": "Error al vincular el PR. Inténtelo de nuevo."
     }
   }
 }

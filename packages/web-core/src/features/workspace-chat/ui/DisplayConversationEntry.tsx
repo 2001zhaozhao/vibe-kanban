@@ -192,6 +192,11 @@ function renderToolUseEntry(
 
   // Plan presentation - use ChatApprovalCard
   if (action_type.action === 'plan_presentation') {
+    // Codex can emit an initial empty plan placeholder before content arrives.
+    // Suppress empty cards to avoid duplicate-looking plan boxes.
+    if (!action_type.plan.trim()) {
+      return null;
+    }
     return (
       <PlanEntry
         plan={action_type.plan}

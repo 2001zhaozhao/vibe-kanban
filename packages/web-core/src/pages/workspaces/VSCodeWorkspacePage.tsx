@@ -8,10 +8,8 @@ import { AppWithStyleOverride } from '@/shared/lib/StyleOverride';
 import { useStyleOverrideThemeSetter } from '@/shared/lib/StyleOverride';
 import { WebviewContextMenu } from '@/integrations/vscode/ContextMenu';
 import { ArrowDownIcon } from '@phosphor-icons/react';
-import {
-  useWorkspaceContext,
-  useWorkspaceDiffContext,
-} from '@/shared/hooks/useWorkspaceContext';
+import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
+import { useDiffStats } from '@/shared/stores/useWorkspaceDiffStore';
 import { usePageTitle } from '@/shared/hooks/usePageTitle';
 import { SessionChatBoxContainer } from '@/features/workspace-chat/ui/SessionChatBoxContainer';
 import { workspacesApi } from '@/shared/lib/api';
@@ -28,6 +26,7 @@ import { EntriesProvider } from '@/features/workspace-chat/model/contexts/Entrie
 import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/MessageEditContext';
 import { RetryUiProvider } from '@/features/workspace-chat/model/contexts/RetryUiContext';
 import { ApprovalFeedbackProvider } from '@/features/workspace-chat/model/contexts/ApprovalFeedbackContext';
+import { forwardWheelToScroller } from '@/features/workspace-chat/ui/forwardWheelToScroller';
 import { createWorkspaceWithSession } from '@/shared/types/attempt';
 
 function VSCodeChatBox({
@@ -40,6 +39,8 @@ function VSCodeChatBox({
   onScrollToPreviousMessage,
   onScrollToBottom,
   onClearContextAndAcceptPlan,
+  onScrollToUserMessage,
+  getActiveTurnPatchKey,
 }: {
   session: Session | undefined;
   workspaceId: string | undefined;
@@ -50,8 +51,10 @@ function VSCodeChatBox({
   onScrollToPreviousMessage: () => void;
   onScrollToBottom: (behavior?: 'auto' | 'smooth') => void;
   onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
+  onScrollToUserMessage: (patchKey: string) => void;
+  getActiveTurnPatchKey: () => string | null;
 }) {
-  const { diffStats } = useWorkspaceDiffContext();
+  const diffStats = useDiffStats();
 
   return (
     <SessionChatBoxContainer
@@ -80,6 +83,8 @@ function VSCodeChatBox({
       onScrollToPreviousMessage={onScrollToPreviousMessage}
       onScrollToBottom={onScrollToBottom}
       onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
+      onScrollToUserMessage={onScrollToUserMessage}
+      getActiveTurnPatchKey={getActiveTurnPatchKey}
     />
   );
 }
@@ -180,6 +185,14 @@ export function VSCodeWorkspacePage() {
     conversationListRef.current?.scrollToPreviousUserMessage();
   };
 
+  const handleScrollToUserMessage = useCallback((patchKey: string) => {
+    conversationListRef.current?.scrollToEntryByPatchKey(patchKey);
+  }, []);
+
+  const handleGetActiveTurnPatchKey = useCallback(() => {
+    return conversationListRef.current?.getVisibleUserMessagePatchKey() ?? null;
+  }, []);
+
   const handleScrollToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'smooth') => {
       conversationListRef.current?.scrollToBottom(behavior);
@@ -258,7 +271,12 @@ export function VSCodeWorkspacePage() {
                     <p className="text-low">{t('workspaces.notFound')}</p>
                   </div>
                 ) : (
-                  <div className="flex-1 min-h-0 overflow-hidden flex justify-center">
+                  <div
+                    className="flex-1 min-h-0 overflow-hidden flex justify-center"
+                    onWheel={(e) =>
+                      forwardWheelToScroller(e, conversationListRef)
+                    }
+                  >
                     <div className="w-chat max-w-full h-full">
                       <RetryUiProvider workspaceId={workspaceWithSession.id}>
                         <ConversationList
@@ -308,6 +326,8 @@ export function VSCodeWorkspacePage() {
                     onClearContextAndAcceptPlan={
                       handleClearContextAndAcceptPlan
                     }
+                    onScrollToUserMessage={handleScrollToUserMessage}
+                    getActiveTurnPatchKey={handleGetActiveTurnPatchKey}
                   />
                 </div>
               </MessageEditProvider>

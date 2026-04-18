@@ -4,16 +4,17 @@ use api_types::{
     Attachment, AttachmentUrlResponse, AttachmentWithBlob, Blob, CreateIssueAssigneeRequest,
     CreateIssueCommentReactionRequest, CreateIssueCommentRequest, CreateIssueFollowerRequest,
     CreateIssueRelationshipRequest, CreateIssueRequest, CreateIssueTagRequest,
-    CreateProjectRequest, CreateProjectStatusRequest, CreateTagRequest, Issue, IssueAssignee,
-    IssueComment, IssueCommentReaction, IssueFollower, IssuePriority, IssueRelationship,
-    IssueRelationshipType, IssueSortField, IssueTag, ListIssuesQuery, ListIssuesResponse,
-    ListRelayHostsResponse, MemberRole, Notification, NotificationGroupKind, NotificationPayload,
-    NotificationType, OrganizationMember, Project, ProjectStatus, PullRequest, PullRequestStatus,
-    RelayHost, RelaySession, RelaySessionAuthCodeResponse, SearchIssuesRequest, SortDirection, Tag,
+    CreateProjectRequest, CreateProjectStatusRequest, CreatePullRequestIssueRequest,
+    CreateTagRequest, ExportRequest, Issue, IssueAssignee, IssueComment, IssueCommentReaction,
+    IssueFollower, IssuePriority, IssueRelationship, IssueRelationshipType, IssueSortField,
+    IssueTag, ListIssuesQuery, ListIssuesResponse, MemberRole, Notification, NotificationGroupKind,
+    NotificationPayload, NotificationType, OrganizationMember, Project, ProjectStatus, PullRequest,
+    PullRequestIssue, PullRequestStatus, SearchIssuesRequest, SortDirection, Tag,
     UpdateIssueCommentReactionRequest, UpdateIssueCommentRequest, UpdateIssueRequest,
     UpdateNotificationRequest, UpdateProjectRequest, UpdateProjectStatusRequest, UpdateTagRequest,
     User, UserData, Workspace,
 };
+use relay_types::{CreateRemoteSessionResponse, ListRelayHostsResponse, RelayHost};
 use remote::{
     routes::{
         all_mutation_definitions,
@@ -21,7 +22,6 @@ use remote::{
             CommitAttachmentsRequest, CommitAttachmentsResponse, ConfirmUploadRequest,
             InitUploadRequest, InitUploadResponse,
         },
-        hosts::CreateRelaySessionResponse,
     },
     shape_routes::all_shape_routes,
 };
@@ -99,14 +99,14 @@ fn export_shapes() -> String {
         ListIssuesResponse::decl(),
         PullRequestStatus::decl(),
         PullRequest::decl(),
+        PullRequestIssue::decl(),
+        CreatePullRequestIssueRequest::decl(),
         SortDirection::decl(),
         UserData::decl(),
         User::decl(),
         RelayHost::decl(),
         ListRelayHostsResponse::decl(),
-        RelaySession::decl(),
-        CreateRelaySessionResponse::decl(),
-        RelaySessionAuthCodeResponse::decl(),
+        CreateRemoteSessionResponse::decl(),
         MemberRole::decl(),
         OrganizationMember::decl(),
         // Mutation request types
@@ -134,6 +134,8 @@ fn export_shapes() -> String {
         CommitAttachmentsRequest::decl(),
         CommitAttachmentsResponse::decl(),
         AttachmentUrlResponse::decl(),
+        // Export API types
+        ExportRequest::decl(),
     ];
 
     for decl in type_decls {

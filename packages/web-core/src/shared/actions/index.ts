@@ -46,12 +46,13 @@ import {
   ProhibitIcon,
 } from '@phosphor-icons/react';
 import { useDiffViewStore } from '@/shared/stores/useDiffViewStore';
+import { useWorkspaceDiffStore } from '@/shared/stores/useWorkspaceDiffStore';
 import {
   useUiPreferencesStore,
   RIGHT_MAIN_PANEL_MODES,
 } from '@/shared/stores/useUiPreferencesStore';
 
-import { workspacesApi, repoApi } from '@/shared/lib/api';
+import { workspacesApi, relayApi, repoApi } from '@/shared/lib/api';
 import { bulkUpdateIssues } from '@/shared/lib/remoteApi';
 import { workspaceRecordKeys } from '@/shared/hooks/useWorkspaceRecord';
 import { workspaceRepoKeys } from '@/shared/hooks/useWorkspaceRepo';
@@ -706,7 +707,7 @@ export const Actions = {
   ToggleAllDiffs: {
     id: 'toggle-all-diffs',
     label: () => {
-      const { diffPaths } = useDiffViewStore.getState();
+      const diffPaths = Array.from(useWorkspaceDiffStore.getState().diffPaths);
       const { expanded } = useUiPreferencesStore.getState();
       const keys = diffPaths.map((p) => `diff:${p}`);
       const isAllExpanded =
@@ -723,7 +724,7 @@ export const Actions = {
     getTooltip: (ctx) =>
       ctx.isAllDiffsExpanded ? 'Collapse all diffs' : 'Expand all diffs',
     execute: () => {
-      const { diffPaths } = useDiffViewStore.getState();
+      const diffPaths = Array.from(useWorkspaceDiffStore.getState().diffPaths);
       const { expanded, setExpandedAll } = useUiPreferencesStore.getState();
       const keys = diffPaths.map((p) => `diff:${p}`);
       const isAllExpanded =
@@ -743,13 +744,18 @@ export const Actions = {
     execute: async (ctx) => {
       if (!ctx.currentWorkspaceId) return;
       try {
-        const response = await workspacesApi.openEditor(
-          ctx.currentWorkspaceId,
-          {
-            editor_type: null,
-            file_path: null,
-          }
-        );
+        const response =
+          ctx.appRuntime === 'local' && ctx.currentHostId
+            ? await relayApi.openRemoteWorkspaceInEditor({
+                host_id: ctx.currentHostId,
+                workspace_id: ctx.currentWorkspaceId,
+                editor_type: null,
+                file_path: null,
+              })
+            : await workspacesApi.openEditor(ctx.currentWorkspaceId, {
+                editor_type: null,
+                file_path: null,
+              });
         if (response.url) {
           window.open(response.url, '_blank');
         }

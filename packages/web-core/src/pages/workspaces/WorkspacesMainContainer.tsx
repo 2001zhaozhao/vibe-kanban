@@ -20,7 +20,8 @@ import { EntriesProvider } from '@/features/workspace-chat/model/contexts/Entrie
 import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/MessageEditContext';
 import { RetryUiProvider } from '@/features/workspace-chat/model/contexts/RetryUiContext';
 import { ApprovalFeedbackProvider } from '@/features/workspace-chat/model/contexts/ApprovalFeedbackContext';
-import { useWorkspaceDiffContext } from '@/shared/hooks/useWorkspaceContext';
+import { forwardWheelToScroller } from '@/features/workspace-chat/ui/forwardWheelToScroller';
+import { useDiffStats } from '@/shared/stores/useWorkspaceDiffStore';
 
 /**
  * Isolated component that reads diffStats from WorkspaceContext.
@@ -38,6 +39,8 @@ function ChatBoxWithDiffStats({
   onScrollToPreviousMessage,
   onScrollToBottom,
   onClearContextAndAcceptPlan,
+  onScrollToUserMessage,
+  getActiveTurnPatchKey,
 }: {
   session: Session | undefined;
   workspaceId: string | undefined;
@@ -48,8 +51,10 @@ function ChatBoxWithDiffStats({
   onScrollToPreviousMessage: () => void;
   onScrollToBottom: (behavior?: 'auto' | 'smooth') => void;
   onClearContextAndAcceptPlan?: (planText: string) => Promise<void>;
+  onScrollToUserMessage: (patchKey: string) => void;
+  getActiveTurnPatchKey: () => string | null;
 }) {
-  const { diffStats } = useWorkspaceDiffContext();
+  const diffStats = useDiffStats();
 
   return (
     <SessionChatBoxContainer
@@ -78,6 +83,8 @@ function ChatBoxWithDiffStats({
       onScrollToPreviousMessage={onScrollToPreviousMessage}
       onScrollToBottom={onScrollToBottom}
       onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
+      onScrollToUserMessage={onScrollToUserMessage}
+      getActiveTurnPatchKey={getActiveTurnPatchKey}
     />
   );
 }
@@ -94,6 +101,7 @@ interface WorkspacesMainContainerProps {
   repos: RepoWithTargetBranch[];
   onSelectSession: (sessionId: string) => void;
   isLoading: boolean;
+  isSessionsLoading?: boolean;
   isNewSessionMode: boolean;
   onStartNewSession: () => void;
   /** Called when user clicks "Clear Context and Accept" on a plan approval */
@@ -112,6 +120,7 @@ export const WorkspacesMainContainer = forwardRef<
     repos,
     onSelectSession,
     isLoading,
+    isSessionsLoading: _isSessionsLoading,
     isNewSessionMode,
     onStartNewSession,
     onClearContextAndAcceptPlan,
@@ -128,6 +137,14 @@ export const WorkspacesMainContainer = forwardRef<
 
   const handleScrollToPreviousMessage = useCallback(() => {
     conversationListRef.current?.scrollToPreviousUserMessage();
+  }, []);
+
+  const handleScrollToUserMessage = useCallback((patchKey: string) => {
+    conversationListRef.current?.scrollToEntryByPatchKey(patchKey);
+  }, []);
+
+  const handleGetActiveTurnPatchKey = useCallback(() => {
+    return conversationListRef.current?.getVisibleUserMessagePatchKey() ?? null;
   }, []);
 
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -190,7 +207,10 @@ export const WorkspacesMainContainer = forwardRef<
     : 'empty';
 
   const conversationContent = workspaceWithSession ? (
-    <div className="flex-1 min-h-0 overflow-hidden flex justify-center">
+    <div
+      className="flex-1 min-h-0 overflow-hidden flex justify-center"
+      onWheel={(e) => forwardWheelToScroller(e, conversationListRef)}
+    >
       <div className="w-chat max-w-full h-full">
         <RetryUiProvider workspaceId={workspaceWithSession.id}>
           <ConversationList
@@ -217,6 +237,8 @@ export const WorkspacesMainContainer = forwardRef<
       onScrollToPreviousMessage={handleScrollToPreviousMessage}
       onScrollToBottom={handleScrollToBottom}
       onClearContextAndAcceptPlan={onClearContextAndAcceptPlan}
+      onScrollToUserMessage={handleScrollToUserMessage}
+      getActiveTurnPatchKey={handleGetActiveTurnPatchKey}
     />
   );
 

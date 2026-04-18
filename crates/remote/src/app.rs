@@ -73,7 +73,7 @@ impl Server {
             )?);
         }
 
-        if registry.is_empty() && !config.single_user_mode {
+        if registry.is_empty() && auth_config.local().is_none() && !config.single_user_mode {
             bail!("no OAuth providers configured");
         }
 
@@ -109,24 +109,19 @@ impl Server {
             }
         };
 
-        let server_public_base_url = config
-            .server_public_base_url
-            .clone()
-            .unwrap_or_else(|| {
-                if config.single_user_mode {
-                    tracing::info!(
-                        "Single-user mode: defaulting SERVER_PUBLIC_BASE_URL to http://localhost:8081"
-                    );
-                    "http://localhost:8081".to_string()
-                } else {
-                    String::new()
-                }
-            });
+        let server_public_base_url = config.server_public_base_url.clone().unwrap_or_else(|| {
+            if config.single_user_mode {
+                tracing::info!(
+                    "Single-user mode: defaulting SERVER_PUBLIC_BASE_URL to http://localhost:8081"
+                );
+                "http://localhost:8081".to_string()
+            } else {
+                String::new()
+            }
+        });
 
         if server_public_base_url.is_empty() {
-            bail!(
-                "SERVER_PUBLIC_BASE_URL is not set. Please set it in your .env.remote file."
-            );
+            bail!("SERVER_PUBLIC_BASE_URL is not set. Please set it in your .env.remote file.");
         }
 
         let r2 = config.r2.as_ref().map(R2Service::new);

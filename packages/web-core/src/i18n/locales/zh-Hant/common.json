@@ -27,12 +27,7 @@
     "selectOption": "選擇一個選項..."
   },
   "states": {
-    "loading": "載入中...",
-    "loadingHistory": "載入歷史紀錄",
-    "saving": "儲存中...",
-    "error": "錯誤",
-    "success": "成功",
-    "reconnecting": "重新連線中"
+    "loading": "載入中..."
   },
   "language": {
     "browserDefault": "瀏覽器預設"
@@ -77,7 +72,6 @@
   },
   "orgSwitcher": {
     "organizations": "組織",
-    "createOrganization": "建立組織",
     "orgSettings": "組織設定"
   },
   "ok": "確定",
@@ -483,7 +477,7 @@
       },
       "organizations": {
         "title": "Invite your team",
-        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+        "content": "We've automatically created a personal organization and initial project so you can get started with Vibe Kanban. Export your cloud data before shutdown."
       }
     }
   },
@@ -515,12 +509,20 @@
     "default": "預設",
     "model": "模型"
   },
+  "crashScreen": {
+    "title": "發生了錯誤",
+    "description": "應用程式遇到了意外錯誤。",
+    "reload": "重新載入",
+    "showDetails": "顯示詳情",
+    "hideDetails": "隱藏詳情"
+  },
   "syncError": {
     "networkErrors": "網路錯誤",
     "streamsAffected": "{{count}} 個資料流受影響",
     "streamsAffected_other": "{{count}} 個資料流受影響",
     "status": "(狀態 {{status}})",
-    "refreshPage": "重新整理頁面"
+    "refreshPage": "重新整理頁面",
+    "remoteAuthUnavailable": "遠端驗證暫時無法使用。在恢復之前，部分遠端功能可能無法使用。"
   },
   "onboardingSignIn": {
     "subtitle": "Sign in to continue",
@@ -532,16 +534,11 @@
     "yes": "Yes",
     "no": "No"
   },
-  "migration": {
-    "allProjectsMigrated": "您的所有專案已遷移到雲端。",
-    "continueToProjects": "繼續前往專案"
-  },
   "appBar": {
     "kanban": {
-      "tooltip": "看板",
+      "tooltip": "登入以查看專案",
       "title": "看板",
-      "description": "登入以使用看板管理您的編碼代理。",
-      "migrateOldProjects": "遷移舊專案"
+      "description": "登入以使用看板管理您的編碼代理。"
     }
   },
   "errors": {

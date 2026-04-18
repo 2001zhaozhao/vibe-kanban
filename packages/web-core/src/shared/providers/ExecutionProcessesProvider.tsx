@@ -19,7 +19,6 @@ export const ExecutionProcessesProvider: React.FC<{
     error,
   } = useExecutionProcesses(sessionId, { showSoftDeleted: true });
 
-  // Filter out dropped processes (server already filters by session)
   const visible = useMemo(() => {
     return executionProcesses.filter((p) => !p.dropped);
   }, [executionProcesses]);

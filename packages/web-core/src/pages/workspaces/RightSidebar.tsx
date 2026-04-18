@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IssueSectionContainer } from './IssueSectionContainer';
 import { FileTreeContainer } from './FileTreeContainer';
@@ -6,8 +7,7 @@ import { PreviewControlsContainer } from './PreviewControlsContainer';
 import { GitPanelContainer } from './GitPanelContainer';
 import { TerminalPanelContainer } from '@/shared/components/TerminalPanelContainer';
 import { WorkspaceNotesContainer } from './WorkspaceNotesContainer';
-import { useChangesView } from '@/shared/hooks/useChangesView';
-import { useWorkspaceDiffContext } from '@/shared/hooks/useWorkspaceContext';
+import { useDiffs } from '@/shared/stores/useWorkspaceDiffStore';
 import { ArrowsOutSimpleIcon } from '@phosphor-icons/react';
 import { useLogsPanel } from '@/shared/hooks/useLogsPanel';
 import type { RepoWithTargetBranch, Workspace } from 'shared/types';
@@ -16,7 +16,6 @@ import {
   PersistKey,
   RIGHT_MAIN_PANEL_MODES,
   type RightMainPanelMode,
-  useExpandedAll,
   usePersistedExpanded,
   useUiPreferencesStore,
 } from '@/shared/stores/useUiPreferencesStore';
@@ -42,16 +41,14 @@ export interface RightSidebarProps {
   linkedIssueForWorkspace?: { remoteProjectId: string; issueId: string } | null;
 }
 
-export function RightSidebar({
+export const RightSidebar = memo(function RightSidebar({
   rightMainPanelMode,
   selectedWorkspace,
   repos,
   linkedIssueForWorkspace,
 }: RightSidebarProps) {
   const { t } = useTranslation(['tasks', 'common']);
-  const { selectFile } = useChangesView();
-  const { diffs } = useWorkspaceDiffContext();
-  const { setExpanded } = useExpandedAll();
+  const diffs = useDiffs();
   const isTerminalVisible = useUiPreferencesStore((s) => s.isTerminalVisible);
   const { expandTerminal, isTerminalExpanded } = useLogsPanel();
 
@@ -85,7 +82,7 @@ export function RightSidebar({
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.LOGS ||
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW;
 
-  const getUpperExpanded = () => {
+  const upperExpanded = (() => {
     if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES)
       return changesExpanded;
     if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.LOGS)
@@ -93,13 +90,9 @@ export function RightSidebar({
     if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW)
       return devServerExpanded;
     return false;
-  };
+  })();
 
-  const upperExpanded = getUpperExpanded();
-
-  const sections: SectionDef[] = buildWorkspaceSections();
-
-  function buildWorkspaceSections(): SectionDef[] {
+  const sections: SectionDef[] = useMemo(() => {
     const result: SectionDef[] = [
       {
         title: 'Issue',
@@ -158,10 +151,6 @@ export function RightSidebar({
                 key={selectedWorkspace.id}
                 workspaceId={selectedWorkspace.id}
                 diffs={diffs}
-                onSelectFile={(path) => {
-                  selectFile(path);
-                  setExpanded(`diff:${path}`, true);
-                }}
                 className=""
               />
             ),
@@ -201,7 +190,24 @@ export function RightSidebar({
     }
 
     return result;
-  }
+  }, [
+    rightMainPanelMode,
+    selectedWorkspace,
+    repos,
+    diffs,
+    gitExpanded,
+    terminalExpanded,
+    notesExpanded,
+    changesExpanded,
+    processesExpanded,
+    devServerExpanded,
+    isTerminalVisible,
+    isTerminalExpanded,
+    hasUpperContent,
+    upperExpanded,
+    expandTerminal,
+    t,
+  ]);
 
   return (
     <div className="h-full border-l bg-secondary overflow-y-auto">
@@ -235,4 +241,4 @@ export function RightSidebar({
       </div>
     </div>
   );
-}
+});

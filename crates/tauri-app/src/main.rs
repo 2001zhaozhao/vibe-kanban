@@ -25,15 +25,54 @@ use uuid::Uuid;
 
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
-/// Native push notifier using Tauri's notification plugin.
-/// Emits a `navigate-to-workspace` event so the frontend can navigate to the
-/// relevant workspace when the user clicks the notification and the app activates.
+#[cfg(target_os = "linux")]
+mod linux_notifications;
+#[cfg(target_os = "macos")]
+mod macos_notifications;
+#[cfg(target_os = "windows")]
+mod windows_notifications;
+
+/// Native push notifier for backend-initiated notifications.
+/// Uses platform-native APIs with click handling where available,
+/// falls back to `tauri-plugin-notification` otherwise.
 struct TauriNotifier {
     app_handle: tauri::AppHandle,
 }
 
+/// Whether platform-native notifications with click handling are available.
+fn use_native_notifications() -> bool {
+    #[cfg(target_os = "macos")]
+    return macos_notifications::is_available();
+    #[cfg(target_os = "windows")]
+    return windows_notifications::is_available();
+    #[cfg(target_os = "linux")]
+    return linux_notifications::is_available();
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    false
+}
+
+/// Show a notification using the platform-native API (with click handling).
+fn show_native_notification(title: &str, body: &str, deeplink_path: Option<&str>) {
+    #[cfg(target_os = "macos")]
+    macos_notifications::show_notification(title, body, deeplink_path);
+    #[cfg(target_os = "windows")]
+    windows_notifications::show_notification(title, body, deeplink_path);
+    #[cfg(target_os = "linux")]
+    linux_notifications::show_notification(title, body, deeplink_path);
+}
+
 #[tauri::command]
-async fn show_system_notification(title: String, body: String) -> Result<(), String> {
+async fn show_system_notification(
+    title: String,
+    body: String,
+    deeplink_path: Option<String>,
+) -> Result<(), String> {
+    if use_native_notifications() {
+        show_native_notification(&title, &body, deeplink_path.as_deref());
+        return Ok(());
+    }
+
+    // Fallback: generic NotificationService (e.g. macOS dev mode).
     let config = load_config_from_file(&config_path()).await;
     let notification_service = NotificationService::new(Arc::new(tokio::sync::RwLock::new(config)));
     notification_service.notify(&title, &body, None).await;
@@ -49,6 +88,14 @@ fn read_clipboard_text() -> Result<String, String> {
 #[async_trait]
 impl PushNotifier for TauriNotifier {
     async fn send(&self, title: &str, message: &str, workspace_id: Option<Uuid>) {
+        let deeplink_path = workspace_id.map(|id| format!("/workspaces/{id}"));
+
+        if use_native_notifications() {
+            show_native_notification(title, message, deeplink_path.as_deref());
+            return;
+        }
+
+        // Fallback: tauri-plugin-notification (no click handling).
         if let Err(e) = self
             .app_handle
             .notification()
@@ -58,13 +105,6 @@ impl PushNotifier for TauriNotifier {
             .show()
         {
             tracing::warn!("Failed to send Tauri notification: {}", e);
-        }
-
-        if let Some(id) = workspace_id {
-            let _ = self.app_handle.emit(
-                "navigate-to-workspace",
-                serde_json::json!({ "workspaceId": id.to_string() }),
-            );
         }
     }
 }
@@ -108,6 +148,14 @@ fn main() {
             read_clipboard_text
         ]);
 
+    // Unlock WKWebView's native refresh rate on macOS ProMotion / high-Hz displays.
+    // On macOS 13–15 WKWebView caps rAF at 60fps; this plugin disables that cap
+    // via WebKit's private _features API. No-op on macOS 26+ (cap removed by Apple).
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_plugin_macos_fps::init());
+    }
+
     // Only register the updater plugin in release builds — dev builds have a
     // placeholder endpoint that fails config deserialization.
     if !cfg!(debug_assertions) {
@@ -116,17 +164,32 @@ fn main() {
 
     builder
         .setup(move |app| {
+            // Initialize platform-native notifications (request permission,
+            // install click-handling delegates) before anything else.
+            #[cfg(target_os = "macos")]
+            macos_notifications::initialize(app.handle().clone());
+            #[cfg(target_os = "windows")]
+            windows_notifications::initialize(app.handle().clone());
+            #[cfg(target_os = "linux")]
+            linux_notifications::initialize(app.handle().clone());
+
             if cfg!(debug_assertions) {
                 // Dev mode: frontend dev server (Vite) and backend are started
                 // externally. Use WebviewUrl::External so that macOS WKWebView
                 // renders with the same content scaling as the production build.
-                tracing::info!("Running in dev mode — using external frontend/backend servers");
+                let frontend_port =
+                    std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+                let dev_url = format!("http://localhost:{frontend_port}");
+                tracing::info!("Running in dev mode — using external frontend/backend servers (devUrl={dev_url})");
                 let window = create_window(
                     app,
-                    tauri::WebviewUrl::External("http://localhost:3000".parse().unwrap()),
+                    tauri::WebviewUrl::External(dev_url.parse().unwrap()),
                 )?;
                 #[cfg(target_os = "macos")]
-                disable_pinch_zoom(&window);
+                {
+                    disable_pinch_zoom(&window);
+                    optimize_webview_performance(&window);
+                }
                 let _ = window;
             } else {
                 // Production: start the Axum server first, then open the window
@@ -154,7 +217,10 @@ fn main() {
                                 match create_window(&create_handle, webview_url) {
                                     Ok(window) => {
                                         #[cfg(target_os = "macos")]
-                                        disable_pinch_zoom(&window);
+                                        {
+                                            disable_pinch_zoom(&window);
+                                            optimize_webview_performance(&window);
+                                        }
                                         let _ = window;
                                     }
                                     Err(e) => tracing::error!("Failed to create window: {e}"),
@@ -256,6 +322,50 @@ fn disable_pinch_zoom(window: &tauri::WebviewWindow) {
     });
 }
 
+/// Enable GPU-accelerated compositing and drawing in WKWebView.
+///
+/// Embedded WKWebView may not have the same GPU acceleration defaults as Safari,
+/// contributing to the observed performance gap (Chrome > Safari > Tauri).
+/// Sets private WebKit preferences via NSKeyValueCoding (setValue:forKey:)
+/// using the same raw msg_send pattern as tauri-plugin-macos-fps.
+#[cfg(target_os = "macos")]
+fn optimize_webview_performance(window: &tauri::WebviewWindow) {
+    use objc2::{
+        msg_send,
+        runtime::{AnyClass, AnyObject, Bool},
+    };
+
+    let _ = window.with_webview(|webview| unsafe {
+        let wk: &objc2_web_kit::WKWebView = &*webview.inner().cast();
+
+        let config: *mut AnyObject = msg_send![wk, configuration];
+        if config.is_null() {
+            tracing::warn!("WebView optimization: WKWebViewConfiguration is null");
+            return;
+        }
+        let prefs: *mut AnyObject = msg_send![config, preferences];
+        if prefs.is_null() {
+            tracing::warn!("WebView optimization: WKPreferences is null");
+            return;
+        }
+
+        let ns_num_cls = match AnyClass::get(c"NSNumber") {
+            Some(cls) => cls,
+            None => return,
+        };
+        let yes: *mut AnyObject = msg_send![ns_num_cls, numberWithBool: Bool::new(true)];
+
+        for key_str in ["acceleratedCompositingEnabled", "acceleratedDrawingEnabled"] {
+            let key = objc2_foundation::NSString::from_str(key_str);
+            let _: () = msg_send![prefs, setValue: yes, forKey: &*key];
+        }
+
+        tracing::info!(
+            "WebView: GPU acceleration enabled (acceleratedCompositingEnabled + acceleratedDrawingEnabled)"
+        );
+    });
+}
+
 #[cfg(target_os = "macos")]
 fn show_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -269,7 +379,7 @@ fn create_window<R: tauri::Runtime, M: tauri::Manager<R>>(
     url: tauri::WebviewUrl,
 ) -> Result<tauri::WebviewWindow<R>, tauri::Error> {
     let handle = manager.app_handle().clone();
-    let mut builder = tauri::WebviewWindowBuilder::new(manager, "main", url)
+    let builder = tauri::WebviewWindowBuilder::new(manager, "main", url)
         .title("Vibe Kanban")
         .inner_size(1280.0, 800.0)
         .min_inner_size(800.0, 600.0)
@@ -281,18 +391,10 @@ fn create_window<R: tauri::Runtime, M: tauri::Manager<R>>(
     // letting web content extend to the top of the window.
     // Traffic lights are vertically centered within the navbar height (~28px).
     #[cfg(target_os = "macos")]
-    {
-        builder = builder
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(tauri::LogicalPosition::new(8.0, 14.0));
-    }
-
-    // Windows/Linux: remove native decorations entirely.
-    #[cfg(not(target_os = "macos"))]
-    {
-        builder = builder.decorations(false);
-    }
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(8.0, 14.0));
 
     builder
         .on_new_window(move |url, _features| {

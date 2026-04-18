@@ -23,7 +23,7 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize)]
-pub struct CreateWorkspaceRequest {
+struct CreateWorkspaceRequest {
     pub project_id: Uuid,
     pub local_workspace_id: Option<Uuid>,
     pub issue_id: Option<Uuid>,
@@ -34,7 +34,7 @@ pub struct CreateWorkspaceRequest {
     pub lines_removed: Option<i32>,
 }
 
-pub fn router() -> Router<AppState> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/workspaces",
@@ -178,7 +178,12 @@ async fn sync_issue_status_from_local_merge(
         return Ok(StatusCode::NO_CONTENT);
     };
 
-    IssueRepository::sync_status_from_local_workspace_merge(state.pool(), issue_id)
+    let mut conn = state.pool().acquire().await.map_err(|error| {
+        tracing::error!(?error, "failed to acquire connection");
+        ErrorResponse::new(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+    })?;
+
+    IssueRepository::sync_status_from_local_workspace_merge(&mut conn, issue_id)
         .await
         .map_err(|error| {
             tracing::error!(?error, issue_id = %issue_id, "failed to sync issue status");

@@ -3,9 +3,6 @@ import { createHmrContext } from '@/shared/lib/hmrContext';
 import type {
   Session,
   RepoWithTargetBranch,
-  UnifiedPrComment,
-  Diff,
-  DiffStats,
   Workspace as ApiWorkspace,
 } from 'shared/types';
 import type { SidebarWorkspace } from '@/shared/hooks/useWorkspaces';
@@ -24,45 +21,6 @@ export interface NormalizedGitHubComment {
 }
 
 // ---------------------------------------------------------------------------
-// Diff / GitHub-comments context — changes frequently during streaming.
-// Separated so that conversation-shell components do not rerender on diff churn.
-// ---------------------------------------------------------------------------
-
-export interface WorkspaceDiffContextValue {
-  /** Diffs for the current workspace */
-  diffs: Diff[];
-  /** Set of file paths in the diffs */
-  diffPaths: Set<string>;
-  /** Aggregate diff statistics */
-  diffStats: DiffStats;
-  /** GitHub PR Comments */
-  gitHubComments: UnifiedPrComment[];
-  isGitHubCommentsLoading: boolean;
-  showGitHubComments: boolean;
-  setShowGitHubComments: (show: boolean) => void;
-  getGitHubCommentsForFile: (filePath: string) => NormalizedGitHubComment[];
-  getGitHubCommentCountForFile: (filePath: string) => number;
-  getFilesWithGitHubComments: () => string[];
-  getFirstCommentLineForFile: (filePath: string) => number | null;
-}
-
-export const WorkspaceDiffContext =
-  createHmrContext<WorkspaceDiffContextValue | null>(
-    'WorkspaceDiffContext',
-    null
-  );
-
-export function useWorkspaceDiffContext(): WorkspaceDiffContextValue {
-  const context = useContext(WorkspaceDiffContext);
-  if (!context) {
-    throw new Error(
-      'useWorkspaceDiffContext must be used within a WorkspaceProvider'
-    );
-  }
-  return context;
-}
-
-// ---------------------------------------------------------------------------
 // Core workspace context — workspace, sessions, repos, navigation.
 // Changes infrequently; safe for conversation-shell subscriptions.
 // ---------------------------------------------------------------------------
@@ -75,6 +33,7 @@ export interface WorkspaceContextValue {
   activeWorkspaces: SidebarWorkspace[];
   /** Archived workspaces for sidebar display */
   archivedWorkspaces: SidebarWorkspace[];
+  isWorkspacesListLoading: boolean;
   isLoading: boolean;
   isCreateMode: boolean;
   selectWorkspace: (id: string) => void;

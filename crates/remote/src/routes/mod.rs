@@ -18,16 +18,17 @@ mod billing {
     use axum::Router;
 
     use crate::AppState;
-    pub fn public_router() -> Router<AppState> {
+    pub(super) fn public_router() -> Router<AppState> {
         Router::new()
     }
-    pub fn protected_router() -> Router<AppState> {
+    pub(super) fn protected_router() -> Router<AppState> {
         Router::new()
     }
 }
 pub mod attachments;
 pub(crate) mod electric_proxy;
 pub(crate) mod error;
+mod export;
 mod github_app;
 pub mod hosts;
 mod identity;
@@ -38,17 +39,17 @@ pub mod issue_followers;
 pub mod issue_relationships;
 pub mod issue_tags;
 pub mod issues;
-mod migration;
 pub mod notifications;
 mod oauth;
 pub(crate) mod organization_members;
 mod organizations;
 pub mod project_statuses;
 pub mod projects;
+pub mod pull_request_issues;
 mod pull_requests;
 mod review;
-pub mod tags;
 mod single_user;
+pub mod tags;
 mod tokens;
 mod workspaces;
 
@@ -129,11 +130,12 @@ pub fn router(state: AppState) -> Router {
         .merge(issue_followers::router())
         .merge(issue_tags::router())
         .merge(issue_relationships::router())
+        .merge(pull_request_issues::router())
         .merge(pull_requests::router())
         .merge(notifications::router())
         .merge(workspaces::router())
         .merge(billing::protected_router())
-        .merge(migration::router())
+        .merge(export::router())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             require_session,
@@ -199,5 +201,6 @@ pub fn all_mutation_definitions() -> Vec<crate::mutation_definition::MutationDef
         issue_relationships::mutation().definition(),
         issue_comments::mutation().definition(),
         issue_comment_reactions::mutation().definition(),
+        pull_request_issues::mutation().definition(),
     ]
 }

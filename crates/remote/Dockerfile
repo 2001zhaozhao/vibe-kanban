@@ -19,6 +19,7 @@ COPY packages/local-web/package.json packages/local-web/package.json
 COPY packages/remote-web/package.json packages/remote-web/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/web-core/package.json packages/web-core/package.json
+COPY patches/ patches/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
@@ -77,6 +78,7 @@ COPY crates/local-deployment/Cargo.toml crates/local-deployment/Cargo.toml
 COPY crates/deployment/Cargo.toml crates/deployment/Cargo.toml
 COPY crates/review/Cargo.toml crates/review/Cargo.toml
 COPY crates/api-types crates/api-types
+COPY crates/relay-types crates/relay-types
 COPY crates/remote crates/remote
 COPY crates/utils crates/utils
 COPY assets assets

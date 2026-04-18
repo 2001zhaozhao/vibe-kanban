@@ -2,11 +2,11 @@ export type AppDestination =
   | { kind: 'root' }
   | { kind: 'onboarding' }
   | { kind: 'onboarding-sign-in' }
-  | { kind: 'migrate' }
   | { kind: 'workspaces'; hostId?: string }
   | { kind: 'workspaces-create'; hostId?: string }
   | { kind: 'workspace'; workspaceId: string; hostId?: string }
   | { kind: 'workspace-vscode'; workspaceId: string; hostId?: string }
+  | { kind: 'export' }
   | { kind: 'project'; projectId: string }
   | {
       kind: 'project-issue';
@@ -43,7 +43,6 @@ export interface AppNavigation {
   goToRoot(transition?: NavigationTransition): void;
   goToOnboarding(transition?: NavigationTransition): void;
   goToOnboardingSignIn(transition?: NavigationTransition): void;
-  goToMigrate(transition?: NavigationTransition): void;
   goToWorkspaces(transition?: NavigationTransition): void;
   goToWorkspacesCreate(transition?: NavigationTransition): void;
   goToWorkspace(workspaceId: string, transition?: NavigationTransition): void;
@@ -51,6 +50,7 @@ export interface AppNavigation {
     workspaceId: string,
     transition?: NavigationTransition
   ): void;
+  goToExport(transition?: NavigationTransition): void;
   goToProject(projectId: string, transition?: NavigationTransition): void;
   goToProjectIssue(
     projectId: string,
@@ -163,6 +163,24 @@ export function isWorkspacesDestination(
     default:
       return false;
   }
+}
+
+export function isLocalWorkspacesDestination(
+  destination: AppDestination | null
+): destination is WorkspaceDestination {
+  return (
+    isWorkspacesDestination(destination) &&
+    getDestinationHostId(destination) === null
+  );
+}
+
+export function isRemoteWorkspacesDestination(
+  destination: AppDestination | null
+): destination is WorkspaceDestination {
+  return (
+    isWorkspacesDestination(destination) &&
+    getDestinationHostId(destination) !== null
+  );
 }
 
 export function getProjectDestination(

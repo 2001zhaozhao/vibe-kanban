@@ -27,12 +27,7 @@
     "selectOption": "选择一个选项..."
   },
   "states": {
-    "loading": "加载中...",
-    "loadingHistory": "加载历史记录",
-    "saving": "保存中...",
-    "error": "错误",
-    "success": "成功",
-    "reconnecting": "重新连接中"
+    "loading": "加载中..."
   },
   "language": {
     "browserDefault": "浏览器默认"
@@ -77,7 +72,6 @@
   },
   "orgSwitcher": {
     "organizations": "组织",
-    "createOrganization": "创建组织",
     "orgSettings": "组织设置"
   },
   "ok": "确定",
@@ -483,7 +477,7 @@
       },
       "organizations": {
         "title": "Invite your team",
-        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+        "content": "We've automatically created a personal organization and initial project so you can get started with Vibe Kanban. Export your cloud data before shutdown."
       }
     }
   },
@@ -515,12 +509,20 @@
     "default": "默认",
     "model": "模型"
   },
+  "crashScreen": {
+    "title": "出了点问题",
+    "description": "应用程序遇到了意外错误。",
+    "reload": "重新加载",
+    "showDetails": "显示详情",
+    "hideDetails": "隐藏详情"
+  },
   "syncError": {
     "networkErrors": "网络错误",
     "streamsAffected": "{{count}} 个数据流受影响",
     "streamsAffected_other": "{{count}} 个数据流受影响",
     "status": "(状态 {{status}})",
-    "refreshPage": "刷新页面"
+    "refreshPage": "刷新页面",
+    "remoteAuthUnavailable": "远程身份验证暂时不可用。在恢复之前，部分远程功能可能无法使用。"
   },
   "onboardingSignIn": {
     "subtitle": "Sign in to continue",
@@ -532,16 +534,11 @@
     "yes": "Yes",
     "no": "No"
   },
-  "migration": {
-    "allProjectsMigrated": "您的所有项目已迁移到云端。",
-    "continueToProjects": "继续前往项目"
-  },
   "appBar": {
     "kanban": {
-      "tooltip": "看板",
+      "tooltip": "登录以查看项目",
       "title": "看板",
-      "description": "登录以使用看板管理您的编码代理。",
-      "migrateOldProjects": "迁移旧项目"
+      "description": "登录以使用看板管理您的编码代理。"
     }
   },
   "errors": {

@@ -54,7 +54,16 @@ export type ListIssuesResponse = { issues: Array<Issue>, total_count: number, li
 
 export type PullRequestStatus = "open" | "merged" | "closed";
 
-export type PullRequest = { id: string, url: string, number: number, status: PullRequestStatus, merged_at: string | null, merge_commit_sha: string | null, target_branch_name: string, issue_id: string, workspace_id: string | null, created_at: string, updated_at: string, };
+export type PullRequest = { id: string, url: string, number: number, status: PullRequestStatus, merged_at: string | null, merge_commit_sha: string | null, target_branch_name: string, project_id: string, issue_id: string, workspace_id: string | null, created_at: string, updated_at: string, };
+
+export type PullRequestIssue = { id: string, pull_request_id: string, issue_id: string, };
+
+export type CreatePullRequestIssueRequest = { 
+/**
+ * Optional client-generated ID. If not provided, server generates one.
+ * Using client-generated IDs enables stable optimistic updates.
+ */
+id?: string, issue_id: string, url: string, number: number, status: PullRequestStatus, merged_at: string | null, merge_commit_sha: string | null, target_branch_name: string, };
 
 export type SortDirection = "asc" | "desc";
 
@@ -62,15 +71,11 @@ export type UserData = { user_id: string, first_name: string | null, last_name: 
 
 export type User = { id: string, email: string, first_name: string | null, last_name: string | null, username: string | null, created_at: string, updated_at: string, };
 
-export type RelayHost = { id: string, owner_user_id: string, name: string, status: string, last_seen_at: string | null, agent_version: string | null, created_at: string, updated_at: string, access_role: string, };
+export type RelayHost = { id: string, owner_user_id: string, machine_id: string, name: string, status: string, last_seen_at: string | null, agent_version: string | null, created_at: string, updated_at: string, access_role: string, };
 
 export type ListRelayHostsResponse = { hosts: Array<RelayHost>, };
 
-export type RelaySession = { id: string, host_id: string, request_user_id: string, state: string, created_at: string, expires_at: string, claimed_at: string | null, ended_at: string | null, };
-
-export type CreateRelaySessionResponse = { session: RelaySession, };
-
-export type RelaySessionAuthCodeResponse = { session_id: string, code: string, };
+export type CreateRemoteSessionResponse = { session_id: string, };
 
 export enum MemberRole { ADMIN = "ADMIN", MEMBER = "MEMBER" }
 
@@ -171,6 +176,12 @@ export type CommitAttachmentsRequest = { attachment_ids: Array<string>, };
 export type CommitAttachmentsResponse = { attachments: Array<AttachmentWithBlob>, };
 
 export type AttachmentUrlResponse = { url: string, };
+
+export type ExportRequest = { organization_id: string, 
+/**
+ * If empty, exports all projects in the organization.
+ */
+project_ids: Array<string>, include_attachments: boolean, };
 
 // Shape definition interface
 export interface ShapeDefinition<T> {
@@ -290,6 +301,13 @@ export const PROJECT_PULL_REQUESTS_SHAPE = defineShape<PullRequest>(
   '/v1/fallback/pull_requests'
 );
 
+export const PROJECT_PULL_REQUEST_ISSUES_SHAPE = defineShape<PullRequestIssue>(
+  'pull_request_issues',
+  ['project_id'] as const,
+  '/v1/shape/project/{project_id}/pull_request_issues',
+  '/v1/fallback/pull_request_issues'
+);
+
 export const ISSUE_COMMENTS_SHAPE = defineShape<IssueComment>(
   'issue_comments',
   ['issue_id'] as const,
@@ -386,6 +404,11 @@ export const ISSUE_COMMENT_MUTATION = defineMutation<IssueComment, CreateIssueCo
 export const ISSUE_COMMENT_REACTION_MUTATION = defineMutation<IssueCommentReaction, CreateIssueCommentReactionRequest, UpdateIssueCommentReactionRequest>(
   'IssueCommentReaction',
   '/v1/issue_comment_reactions'
+);
+
+export const PULL_REQUEST_ISSUE_MUTATION = defineMutation<PullRequestIssue, CreatePullRequestIssueRequest, unknown>(
+  'PullRequestIssue',
+  '/v1/pull_request_issues'
 );
 
 // Type helpers to extract types from a mutation definition

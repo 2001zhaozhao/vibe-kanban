@@ -7,9 +7,12 @@ use std::{
 use deployment::{Deployment, DeploymentError};
 use services::services::container::ContainerService;
 use tokio_util::sync::CancellationToken;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 use utils::assets::asset_dir;
 
-use crate::{DeploymentImpl, tunnel};
+use crate::{
+    DeploymentImpl, middleware::origin::validate_origin, routes, runtime::relay_registration,
+};
 
 /// A running server instance. Callers can read the port, then call `serve()`
 /// to run the server until the shutdown token is cancelled.
@@ -38,23 +41,19 @@ impl ServerHandle {
         // Start relay tunnel so the host registers with the relay server.
         // This must happen after the port is known (it's needed for local
         // proxying) and is shared between the standalone binary and Tauri.
-        self.deployment.server_info().set_port(self.port).await;
         self.deployment
-            .server_info()
-            .set_bind_ip(self.main_listener.local_addr()?.ip())
-            .await;
-        let relay_host_name = {
-            let config = self.deployment.config().read().await;
-            tunnel::effective_relay_host_name(&config, self.deployment.user_id())
-        };
+            .client_info()
+            .set_server_addr(self.main_listener.local_addr()?)
+            .expect("client server address already set");
         self.deployment
-            .server_info()
-            .set_hostname(relay_host_name)
-            .await;
-        tunnel::spawn_relay(&self.deployment).await;
+            .client_info()
+            .set_preview_proxy_port(self.proxy_port)
+            .expect("client preview proxy port already set");
+        relay_registration::spawn_relay(&self.deployment).await;
 
-        let app_router = crate::routes::router(self.deployment.clone());
-        let proxy_router: axum::Router = crate::preview_proxy::router();
+        let app_router = routes::router(self.deployment.clone());
+        let proxy_router: axum::Router = routes::preview::subdomain_router(self.deployment.clone())
+            .layer(ValidateRequestHeaderLayer::custom(validate_origin));
 
         let main_shutdown = self.shutdown_token.clone();
         let proxy_shutdown = self.shutdown_token.clone();
@@ -98,20 +97,23 @@ impl ServerHandle {
 /// resolves to `::1` (IPv6) first — binding to `127.0.0.1` (IPv4) while
 /// the browser connects via `::1` causes "connection refused".
 pub async fn start() -> anyhow::Result<ServerHandle> {
-    start_with_bind("localhost:0", "localhost:0").await
+    start_with_bind("localhost:0", "localhost:0", CancellationToken::new()).await
 }
 
 /// Like [`start`], but lets the caller specify the bind addresses for the main
 /// server and the preview proxy (e.g. `"0.0.0.0:8080"`).
-pub async fn start_with_bind(main_addr: &str, proxy_addr: &str) -> anyhow::Result<ServerHandle> {
-    let deployment = initialize_deployment().await?;
+pub async fn start_with_bind(
+    main_addr: &str,
+    proxy_addr: &str,
+    shutdown_token: CancellationToken,
+) -> anyhow::Result<ServerHandle> {
+    let deployment = initialize_deployment(shutdown_token.clone()).await?;
 
     let listener = tokio::net::TcpListener::bind(main_addr).await?;
     let port = listener.local_addr()?.port();
 
     let proxy_listener = tokio::net::TcpListener::bind(proxy_addr).await?;
     let proxy_port = proxy_listener.local_addr()?.port();
-    crate::preview_proxy::set_proxy_port(proxy_port);
 
     tracing::info!("Server on :{port}, Preview proxy on :{proxy_port}");
 
@@ -119,7 +121,7 @@ pub async fn start_with_bind(main_addr: &str, proxy_addr: &str) -> anyhow::Resul
         port,
         proxy_port,
         deployment,
-        shutdown_token: CancellationToken::new(),
+        shutdown_token,
         main_listener: listener,
         proxy_listener,
     })
@@ -127,7 +129,9 @@ pub async fn start_with_bind(main_addr: &str, proxy_addr: &str) -> anyhow::Resul
 
 /// Initialize the deployment: create asset directory, run migrations, backfill data,
 /// and pre-warm caches. Shared between the standalone server and the Tauri app.
-pub async fn initialize_deployment() -> Result<DeploymentImpl, DeploymentError> {
+pub async fn initialize_deployment(
+    shutdown: CancellationToken,
+) -> Result<DeploymentImpl, DeploymentError> {
     // Create asset directory if it doesn't exist
     if !asset_dir().exists() {
         std::fs::create_dir_all(asset_dir()).map_err(|e| {
@@ -148,7 +152,7 @@ pub async fn initialize_deployment() -> Result<DeploymentImpl, DeploymentError> 
         tracing::info!("Database copy complete");
     }
 
-    let deployment = DeploymentImpl::new().await?;
+    let deployment = DeploymentImpl::new(shutdown).await?;
     migrate_legacy_attachment_directories(&deployment).await?;
     deployment.update_sentry_scope().await?;
     deployment

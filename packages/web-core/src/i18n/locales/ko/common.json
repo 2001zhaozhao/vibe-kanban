@@ -68,16 +68,10 @@
     "browserDefault": "브라우저 기본값"
   },
   "states": {
-    "error": "오류",
-    "loading": "로딩 중...",
-    "loadingHistory": "기록 로딩 중",
-    "reconnecting": "재연결 중",
-    "saving": "저장 중...",
-    "success": "성공"
+    "loading": "로딩 중..."
   },
   "orgSwitcher": {
     "organizations": "조직",
-    "createOrganization": "조직 만들기",
     "orgSettings": "조직 설정"
   },
   "ok": "확인",
@@ -483,7 +477,7 @@
       },
       "organizations": {
         "title": "Invite your team",
-        "content": "We've automatically created a personal organization, and initial project so you can easily get started with Vibe Kanban. You can also create new organizations and invite your team to collaborate."
+        "content": "We've automatically created a personal organization and initial project so you can get started with Vibe Kanban. Export your cloud data before shutdown."
       }
     }
   },
@@ -515,12 +509,20 @@
     "default": "기본값",
     "model": "모델"
   },
+  "crashScreen": {
+    "title": "문제가 발생했습니다",
+    "description": "애플리케이션에서 예기치 않은 오류가 발생했습니다.",
+    "reload": "새로고침",
+    "showDetails": "세부정보 표시",
+    "hideDetails": "세부정보 숨기기"
+  },
   "syncError": {
     "networkErrors": "네트워크 오류",
     "streamsAffected": "{{count}}개 스트림이 영향을 받음",
     "streamsAffected_other": "{{count}}개 스트림이 영향을 받음",
     "status": "(상태 {{status}})",
-    "refreshPage": "페이지 새로고침"
+    "refreshPage": "페이지 새로고침",
+    "remoteAuthUnavailable": "원격 인증을 일시적으로 사용할 수 없습니다. 복구될 때까지 일부 원격 기능이 작동하지 않을 수 있습니다."
   },
   "onboardingSignIn": {
     "subtitle": "Sign in to continue",
@@ -532,16 +534,11 @@
     "yes": "Yes",
     "no": "No"
   },
-  "migration": {
-    "allProjectsMigrated": "모든 프로젝트가 이미 클라우드로 마이그레이션되었습니다.",
-    "continueToProjects": "프로젝트로 계속"
-  },
   "appBar": {
     "kanban": {
-      "tooltip": "칸반",
+      "tooltip": "프로젝트를 보려면 로그인하세요",
       "title": "칸반 보드",
-      "description": "로그인하여 칸반 보드로 코딩 에이전트를 정리하세요.",
-      "migrateOldProjects": "이전 프로젝트 마이그레이션"
+      "description": "로그인하여 칸반 보드로 코딩 에이전트를 정리하세요."
     }
   },
   "errors": {

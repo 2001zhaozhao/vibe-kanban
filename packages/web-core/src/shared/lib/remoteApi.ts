@@ -3,7 +3,6 @@ import type {
   AttachmentWithBlob,
   CommitAttachmentsRequest,
   CommitAttachmentsResponse,
-  CreateRelaySessionResponse,
   ConfirmUploadRequest,
   InitUploadRequest,
   InitUploadResponse,
@@ -71,6 +70,12 @@ export function setRemoteApiBase(base: string | null | undefined) {
     _remoteApiBase = parsed.url;
     _remoteApiBasicAuth = parsed.basicAuth;
     syncRelayApiBaseWithRemote(parsed.url);
+  } else {
+    _remoteApiBase = BUILD_TIME_API_BASE;
+    _remoteApiBasicAuth = buildTimeParsed.basicAuth;
+    if (_remoteApiBase) {
+      syncRelayApiBaseWithRemote(_remoteApiBase);
+    }
   }
 }
 
@@ -242,20 +247,6 @@ export async function listRelayHosts(): Promise<RelayHost[]> {
 
   const body = (await response.json()) as ListRelayHostsResponse;
   return body.hosts;
-}
-
-export async function createRelaySession(
-  hostId: string
-): Promise<CreateRelaySessionResponse['session']> {
-  const response = await makeRequest(`/v1/hosts/${hostId}/sessions`, {
-    method: 'POST',
-  });
-  if (!response.ok) {
-    throw await parseErrorResponse(response, 'Failed to create relay session');
-  }
-
-  const body = (await response.json()) as CreateRelaySessionResponse;
-  return body.session;
 }
 
 // ---------------------------------------------------------------------------

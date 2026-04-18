@@ -130,7 +130,15 @@ selected_project_id: string | null,
 /**
  * Default setting for creating a draft workspace from new issues
  */
-create_draft_workspace_by_default: boolean | null, };
+create_draft_workspace_by_default: boolean | null, 
+/**
+ * Kanban project view selections (active view per project)
+ */
+kanban_project_view_selections: { [key in string]?: JsonValue }, 
+/**
+ * Kanban project view preferences (filters, toggles per project per view)
+ */
+kanban_project_view_preferences: { [key in string]?: JsonValue }, };
 
 export type ProjectRepoDefaultsData = { repos: Array<DraftWorkspaceRepo>, };
 
@@ -200,7 +208,7 @@ export type DiffChangeKind = "added" | "deleted" | "modified" | "renamed" | "cop
 
 export type ApiResponse<T, E = T> = { success: boolean, data: T | null, error_data: E | null, message: string | null, };
 
-export type LoginStatus = { "status": "loggedout" } | { "status": "loggedin", profile: ProfileResponse, };
+export type LoginStatus = { "status": "loggedout" } | { "status": "loggedin", profile: ProfileResponse | null, };
 
 export type ProfileResponse = { user_id: string, username: string | null, email: string, providers: Array<ProviderProfile>, };
 
@@ -250,20 +258,6 @@ export type UpdateMemberRoleRequest = { role: MemberRole, };
 
 export type UpdateMemberRoleResponse = { user_id: string, role: MemberRole, };
 
-export type MigrationRequest = { organization_id: string, 
-/**
- * List of local project IDs to migrate.
- */
-project_ids: Array<string>, };
-
-export type MigrationResponse = { report: MigrationReport, };
-
-export type MigrationReport = { projects: EntityReport, tasks: EntityReport, pr_merges: EntityReport, workspaces: EntityReport, warnings: Array<string>, };
-
-export type EntityReport = { total: number, migrated: number, failed: number, skipped: number, errors: Array<EntityError>, };
-
-export type EntityError = { local_id: string, error: string, };
-
 export type RegisterRepoRequest = { path: string, display_name: string | null, };
 
 export type InitRepoRequest = { parent_path: string, folder_name: string, };
@@ -272,7 +266,7 @@ export type TagSearchParams = { search: string | null, };
 
 export type TokenResponse = { access_token: string, expires_at: string | null, };
 
-export type UserSystemInfo = { version: string, config: Config, analytics_user_id: string, login_status: LoginStatus, environment: Environment, 
+export type UserSystemInfo = { version: string, config: Config, machine_id: string, login_status: LoginStatus, remote_auth_degraded: string | null, environment: Environment, 
 /**
  * Capabilities supported per executor (e.g., { "CLAUDE_CODE": ["SESSION_FORK"] })
  */
@@ -342,6 +336,22 @@ export type OpenEditorRequest = { editor_type: string | null, file_path: string 
 
 export type OpenEditorResponse = { url: string | null, };
 
+export type OpenRemoteEditorResponse = { url: string, local_port: number, ssh_alias: string, };
+
+export type OpenRemoteWorkspaceInEditorRequest = { host_id: string, workspace_id: string, editor_type: string | null, file_path: string | null, };
+
+export type PairRelayHostRequest = { host_id: string, host_name: string, enrollment_code: string, };
+
+export type PairRelayHostResponse = { paired: boolean, };
+
+export type RelayPairedHost = { host_id: string, host_name: string | null, paired_at: string | null, };
+
+export type ListRelayPairedHostsResponse = { hosts: Array<RelayPairedHost>, };
+
+export type RemoveRelayPairedHostResponse = { removed: boolean, };
+
+export type CreateWorkspaceApiRequest = { name: string | null, };
+
 export type LinkedIssueInfo = { remote_project_id: string, issue_id: string, };
 
 export type CreatePrApiRequest = { title: string, body: string | null, target_branch: string | null, draft: boolean | null, repo_id: string, auto_generate_description: boolean, };
@@ -396,11 +406,13 @@ export type UnifiedPrComment = { "comment_type": "general", id: string, author: 
 
 export type ProviderKind = "git_hub" | "azure_dev_ops" | "unknown";
 
-export type OpenPrInfo = { number: bigint, url: string, title: string, head_branch: string, base_branch: string, };
+export type PullRequestDetail = { number: bigint, url: string, status: MergeStatus, merged_at: string | null, merge_commit_sha: string | null, title: string, base_branch: string, head_branch: string, };
 
 export type GitRemote = { name: string, url: string, };
 
 export type ListPrsError = { "type": "cli_not_installed", provider: ProviderKind, } | { "type": "auth_failed", message: string, } | { "type": "unsupported_provider" };
+
+export type LinkPrToIssueRequest = { pr_url: string, pr_number: number, base_branch: string, };
 
 export type CreateWorkspaceFromPrBody = { repo_id: string, pr_number: bigint, pr_title: string, pr_url: string, head_branch: string, base_branch: string, run_setup: boolean, remote_name: string | null, };
 
@@ -476,7 +488,7 @@ export type DirectoryListResponse = { entries: Array<DirectoryEntry>, current_pa
 
 export type SearchMode = "taskform" | "settings";
 
-export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, remote_onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, github: GitHubConfig, analytics_enabled: boolean, workspace_dir: string | null, last_app_version: string | null, show_release_notes: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, pr_auto_description_enabled: boolean, pr_auto_description_prompt: string | null, commit_reminder_enabled: boolean, commit_reminder_prompt: string | null, send_message_shortcut: SendMessageShortcut, relay_enabled: boolean, relay_host_name: string | null, };
+export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, remote_onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, github: GitHubConfig, analytics_enabled: boolean, workspace_dir: string | null, last_app_version: string | null, show_release_notes: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, pr_auto_description_enabled: boolean, pr_auto_description_prompt: string | null, commit_reminder_enabled: boolean, commit_reminder_prompt: string | null, send_message_shortcut: SendMessageShortcut, relay_enabled: boolean, host_nickname: string | null, };
 
 export type NotificationConfig = { sound_enabled: boolean, push_enabled: boolean, sound_file: SoundFile, };
 
@@ -609,7 +621,7 @@ export type ExecutorConfigs = { executors: { [key in BaseCodingAgent]?: Executor
 
 export enum BaseAgentCapability { SESSION_FORK = "SESSION_FORK", SETUP_HELPER = "SETUP_HELPER", CONTEXT_USAGE = "CONTEXT_USAGE" }
 
-export type ClaudeEffort = "low" | "medium" | "high" | "max";
+export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export type ClaudeCode = { append_prompt: AppendPrompt, claude_code_router?: boolean | null, plan?: boolean | null, approvals?: boolean | null, model?: string | null, effort?: ClaudeEffort | null, agent?: string | null, dangerously_skip_permissions?: boolean | null, disable_api_key?: boolean | null, base_command_override?: string | null, additional_params?: Array<string> | null, env?: { [key in string]?: string } | null, };
 
@@ -796,6 +808,80 @@ permissions: Array<PermissionPolicy>, };
 export type ExecutorDiscoveredOptions = { model_selector: ModelSelectorConfig, slash_commands: Array<SlashCommandDescription>, loading_models: boolean, loading_agents: boolean, loading_slash_commands: boolean, error: string | null, };
 
 export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
+
+export type RelayWsMessageType = "text" | "binary" | "ping" | "pong" | "close";
+
+export type DataChannelMessage = { "type": "http_request" } & DataChannelRequest | { "type": "http_response" } & DataChannelResponse | { "type": "ws_open" } & WsOpen | { "type": "ws_opened" } & WsOpened | { "type": "ws_frame" } & WsFrame | { "type": "ws_close" } & WsClose | { "type": "ws_error" } & WsError;
+
+export type DataChannelRequest = { id: string, method: string, path: string, headers: { [key in string]?: Array<string> }, 
+/**
+ * Base64-encoded request body, if any.
+ */
+body_b64?: string | null, };
+
+export type DataChannelResponse = { id: string, status: number, headers: { [key in string]?: Array<string> }, 
+/**
+ * Base64-encoded response body, if any.
+ */
+body_b64?: string | null, };
+
+export type WsOpen = { 
+/**
+ * Unique connection ID for multiplexing.
+ */
+conn_id: string, 
+/**
+ * Target path, e.g. `/api/sessions/abc/queue`.
+ */
+path: string, 
+/**
+ * Optional sub-protocol(s) to negotiate.
+ */
+protocols?: string | null, };
+
+export type WsOpened = { conn_id: string, 
+/**
+ * The sub-protocol selected by the server, if any.
+ */
+selected_protocol?: string | null, };
+
+export type WsFrame = { conn_id: string, msg_type: RelayWsMessageType, 
+/**
+ * Base64-encoded payload.
+ */
+payload_b64?: string | null, };
+
+export type WsClose = { conn_id: string, 
+/**
+ * Close code (RFC 6455 §7.4).
+ */
+code?: number | null, 
+/**
+ * Close reason.
+ */
+reason?: string | null, };
+
+export type WsError = { conn_id: string, error: string, };
+
+export type SdpOffer = { 
+/**
+ * The SDP string from the peer's `RTCPeerConnection.createOffer()`.
+ */
+sdp: string, 
+/**
+ * Caller-provided session identifier to correlate offer/answer/candidates.
+ */
+session_id: string, };
+
+export type SdpAnswer = { 
+/**
+ * The SDP string from `Rtc::direct_api().create_answer()`.
+ */
+sdp: string, 
+/**
+ * Echoed session identifier from the offer.
+ */
+session_id: string, };
 
 export const DEFAULT_PR_DESCRIPTION_PROMPT = "Update the PR that was just created with a better title and description.\nThe PR number is #{pr_number} and the URL is {pr_url}.\n\nAnalyze the changes in this branch and write:\n1. A concise, descriptive title that summarizes the changes, postfixed with \"(Vibe Kanban)\"\n2. A detailed description that explains:\n   - What changes were made\n   - Why they were made (based on the task context)\n   - Any important implementation details\n   - At the end, include a note: \"This PR was written using [Vibe Kanban](https://vibekanban.com)\"\n\nUse the appropriate CLI tool to update the PR (gh pr edit for GitHub, az repos pr update for Azure DevOps).";
 

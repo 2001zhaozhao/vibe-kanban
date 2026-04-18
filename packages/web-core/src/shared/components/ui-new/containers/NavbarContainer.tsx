@@ -1,4 +1,5 @@
 import { useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { useUserContext } from '@/shared/hooks/useUserContext';
 import { useActions } from '@/shared/hooks/useActions';
@@ -16,6 +17,7 @@ import { useShape } from '@/shared/integrations/electric/hooks';
 import { PROJECT_ISSUES_SHAPE } from 'shared/remote-types';
 import { RemoteIssueLink } from './RemoteIssueLink';
 import { AppBarUserPopoverContainer } from './AppBarUserPopoverContainer';
+import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { NavbarActionGroups } from '@/shared/actions';
 import {
   NavbarDivider,
@@ -36,6 +38,7 @@ import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
 import { getProjectDestination } from '@/shared/lib/routes/appNavigation';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useCurrentAppDestination } from '@/shared/hooks/useCurrentAppDestination';
+import { getRemoteAuthDegradedMessage } from '@/shared/lib/auth/remoteAuthDegraded';
 
 /**
  * Check if a NavbarItem is a divider
@@ -112,19 +115,19 @@ function toNavbarSectionItems(
 
 export function NavbarContainer({
   mobileMode = false,
-  onCreateOrg,
   onOrgSelect,
   onOpenDrawer,
 }: {
   mobileMode?: boolean;
-  onCreateOrg?: () => void;
   onOrgSelect?: (orgId: string) => void;
   onOpenDrawer?: () => void;
 }) {
+  const { t } = useTranslation('common');
   const { executeAction } = useActions();
   const { workspace: selectedWorkspace, isCreateMode } = useWorkspaceContext();
   const { workspaces } = useUserContext();
   const syncErrorContext = useSyncErrorContext();
+  const { remoteAuthDegraded } = useUserSystem();
   const appNavigation = useAppNavigation();
   const destination = useCurrentAppDestination();
   const projectDestination = useMemo(
@@ -166,46 +169,37 @@ export function NavbarContainer({
     [executeAction, selectedWorkspace?.id]
   );
 
-  const isMigratePage = actionCtx.layoutMode === 'migrate';
-
-  // Filter visible actions for each section (empty on migrate page)
   const leftItems = useMemo(
     () =>
-      isMigratePage
-        ? []
-        : toNavbarSectionItems(
-            filterNavbarItems(NavbarActionGroups.left, actionCtx),
-            actionCtx,
-            handleExecuteAction
-          ),
-    [actionCtx, handleExecuteAction, isMigratePage]
+      toNavbarSectionItems(
+        filterNavbarItems(NavbarActionGroups.left, actionCtx),
+        actionCtx,
+        handleExecuteAction
+      ),
+    [actionCtx, handleExecuteAction]
   );
 
   const rightItems = useMemo(
     () =>
-      isMigratePage
-        ? []
-        : toNavbarSectionItems(
-            filterNavbarItems(NavbarActionGroups.right, actionCtx),
-            actionCtx,
-            handleExecuteAction
-          ),
-    [actionCtx, handleExecuteAction, isMigratePage]
+      toNavbarSectionItems(
+        filterNavbarItems(NavbarActionGroups.right, actionCtx),
+        actionCtx,
+        handleExecuteAction
+      ),
+    [actionCtx, handleExecuteAction]
   );
 
   const navbarTitle = isCreateMode
     ? 'Create Workspace'
-    : isMigratePage
-      ? 'Migrate'
-      : isOnProjectPage
-        ? orgName
-        : selectedWorkspace?.branch;
+    : isOnProjectPage
+      ? orgName
+      : selectedWorkspace?.branch;
 
   // Breadcrumbs: Project / Issue / Workspace (only on workspace pages with linked project)
   const linkedProjectId = linkedRemoteWorkspace?.project_id ?? null;
   const linkedIssueId = linkedRemoteWorkspace?.issue_id ?? null;
   const shouldResolveBreadcrumbData =
-    !isOnProjectPage && !isCreateMode && !isMigratePage && !!linkedProjectId;
+    !isOnProjectPage && !isCreateMode && !!linkedProjectId;
   const shouldResolveIssueBreadcrumb =
     shouldResolveBreadcrumbData && !!linkedIssueId;
 
@@ -309,23 +303,34 @@ export function NavbarContainer({
         organizations={orgsData?.organizations ?? []}
         selectedOrgId={selectedOrgId ?? ''}
         onOrgSelect={onOrgSelect ?? (() => {})}
-        onCreateOrg={onCreateOrg ?? (() => {})}
       />
     );
-  }, [
-    mobileMode,
-    orgsData?.organizations,
-    selectedOrgId,
-    onCreateOrg,
-    onOrgSelect,
-  ]);
+  }, [mobileMode, orgsData?.organizations, selectedOrgId, onOrgSelect]);
+
+  const syncErrors = useMemo(() => {
+    const errors = syncErrorContext?.errors ? [...syncErrorContext.errors] : [];
+
+    if (remoteAuthDegraded) {
+      errors.push({
+        streamId: 'remote-auth-degraded',
+        tableName: 'Remote authentication',
+        error: {
+          message: getRemoteAuthDegradedMessage(remoteAuthDegraded, t),
+        },
+        retry: () => window.location.reload(),
+      });
+    }
+
+    return errors;
+  }, [remoteAuthDegraded, syncErrorContext?.errors, t]);
+
   return (
     <Navbar
       workspaceTitle={navbarTitle}
       breadcrumbs={breadcrumbs}
       leftItems={leftItems}
       rightItems={rightItems}
-      syncErrors={syncErrorContext?.errors}
+      syncErrors={syncErrors}
       mobileMode={mobileMode}
       mobileUserSlot={userPopoverSlot}
       isOnProjectPage={isOnProjectPage}
