@@ -173,8 +173,10 @@ export function SharedAppLayout() {
   );
   const isWorkspacesActive = isLocalWorkspacesDestination(currentDestination);
   const isExportActive = currentDestination?.kind === 'export';
-  // Fork: disabled cloud shutdown banner for self-hosting
-  const showCloudShutdownBanner = false;
+  // Fork: disabled cloud shutdown banner for self-hosting (set VITE_SHOW_CLOUD_SHUTDOWN_BANNER=1 to re-enable)
+  const showCloudShutdownBanner = import.meta.env.VITE_SHOW_CLOUD_SHUTDOWN_BANNER
+    ? isExportActive || (isSignedIn && isProjectDestination(currentDestination))
+    : false;
   const isWorkspaceSidebarPreviewEnabled =
     !isMobile && isWorkspacesActive && !isLeftSidebarVisible;
   const activeProjectId = projectDestination?.projectId ?? null;
