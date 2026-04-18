@@ -59,8 +59,8 @@ export function RemoteAppShell({ children }: RemoteAppShellProps) {
   const isWorkspaceContextRoute = location.pathname.includes("/workspaces");
   const isProjectRoute = /^\/projects\/[^/]+/.test(location.pathname);
   const isExportRoute = location.pathname === "/export";
-  const showCloudShutdownBanner =
-    isExportRoute || (isSignedIn && isProjectRoute);
+  // Fork: disabled cloud shutdown banner for self-hosting
+  const showCloudShutdownBanner = false;
 
   useCommandBarShortcut(
     () => CommandBarDialog.show(),

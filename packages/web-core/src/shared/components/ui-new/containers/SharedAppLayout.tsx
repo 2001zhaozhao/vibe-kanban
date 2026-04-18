@@ -173,8 +173,8 @@ export function SharedAppLayout() {
   );
   const isWorkspacesActive = isLocalWorkspacesDestination(currentDestination);
   const isExportActive = currentDestination?.kind === 'export';
-  const showCloudShutdownBanner =
-    isExportActive || (isSignedIn && isProjectDestination(currentDestination));
+  // Fork: disabled cloud shutdown banner for self-hosting
+  const showCloudShutdownBanner = false;
   const isWorkspaceSidebarPreviewEnabled =
     !isMobile && isWorkspacesActive && !isLeftSidebarVisible;
   const activeProjectId = projectDestination?.projectId ?? null;
